@@ -1,4 +1,4 @@
-from user_files.instrument.ControlsHandler_module import *
+from instrument.ControlsHandler_module import *
 from mmm_audio import *
 from std.sys.intrinsics import _type_is_eq
 from std.collections import Deque

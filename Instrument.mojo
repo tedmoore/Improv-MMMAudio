@@ -1,7 +1,7 @@
 from mmm_audio import *
-from user_files.instrument.Instrument_Synths import *
-from user_files.instrument.MatrixMixer_module import *
-from user_files.instrument.ControlsHandler_module import *
+from instrument.Instrument_Synths import *
+from instrument.MatrixMixer_module import *
+from instrument.ControlsHandler_module import *
 from std.reflection import *
 from std.sys.intrinsics import _type_is_eq
 
@@ -601,7 +601,7 @@ struct Instrument(Movable,Copyable):
         self.phasey = ModuleWrapper[Phasey](self.world, Phasey(self.world))
         self.fin = ModuleWrapper(self.world, FIN(self.world))
         self.benjolin = ModuleWrapper(self.world, Benjolin(self.world))
-        self.sample_space = ModuleWrapper(self.world, SampleSpace(self.world,"user_files/instrument/resources/SampleSpace_shoe-squeak.json"))
+        self.sample_space = ModuleWrapper(self.world, SampleSpace(self.world,"instrument/resources/SampleSpace_shoe-squeak.json"))
         self.filterglitch = ModuleWrapper(self.world, FilterGlitch(self.world))
         self.stutter = ModuleWrapper(self.world, Stutter(self.world))
         self.fbdelay = ModuleWrapper[FBDelay,True](self.world, FBDelay(self.world))

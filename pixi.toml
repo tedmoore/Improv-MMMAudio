@@ -1,0 +1,68 @@
+[workspace]
+authors = ["Sam Pluta <spluta@gmail.com>","Ted Moore <ted@tedmooremusic.com>"]
+channels = ["https://conda.modular.com/max-nightly", "conda-forge", "pytorch","https://repo.prefix.dev/modular-community"]
+name = "MMMAudio"
+platforms = ["osx-arm64", "linux-64", "linux-aarch64"]
+version = "0.1.0"
+
+[tasks.validate]
+args = [
+  { "arg" = "plots", "default" = "" }
+]
+cmd = "python testing_mmm_audio/validation/run_all_validations.py {{ plots }}"
+
+[tasks.validate_snapshot]
+cmd = "python testing_mmm_audio/validation/validate_against_snapshot.py"
+
+[tasks.unit_tests_mojo]
+cmd = "mojo testing_mmm_audio/UnitTests.mojo"
+
+[tasks.unit_tests_python]
+cmd = "python -m testing_mmm_audio.UnitTests"
+
+[tasks.test_building]
+cmd = "python testing_mmm_audio/test_build_mojo_files.py"
+
+[tasks.check_docstrings]
+cmd = "python testing_mmm_audio/check_docstrings.py"
+
+[tasks.test_all]
+depends-on = ["unit_tests_mojo", "unit_tests_python", "test_building","validate_snapshot", "check_docstrings"]
+
+[tasks.docs_serve]
+cmd = "mkdocs serve"
+
+[dependencies]
+setuptools = "<82"
+mojo = "1.0.0b2.*"
+numpy = ">=2.3.5,<3"
+scipy = ">=1.17.0,<2"
+librosa = ">=0.11.0,<0.12"
+python = "3.12.*"
+matplotlib = ">=3.10.8,<4"
+pyside6 = ">=6.10.2,<7"
+umap-learn = ">=0.5.11,<0.6"
+mkdocs = ">=1.6.1,<2"
+mkdocs-material = ">=9.7.1,<10"
+mkdocstrings = ">=1.0.3,<2"
+pymdown-extensions = ">=10.21.1,<11"
+pygments = ">=2.19.2,<3"
+mkdocstrings-python = ">=2.0.2,<3"
+ipykernel = ">=7.1.0,<8"
+jupyterlab = ">=4.5.5,<5"
+pixi-kernel = ">=0.7.1,<0.8"
+emberjson = ">=0.3.3,<0.4"
+# portaudio = ">=19.7.0,<20"
+# libhidapi = ">=0.15,<1"
+# pyaudio = "*"
+
+[pypi-dependencies]
+torch = ">=2.10.0, <3"
+pyautogui = ">=0.9.54, <0.10"
+python-osc = ">=1.9.3, <2"
+hidapi = ">=0.15.0, <0.16"
+pyaudio = ">=0.2.14, <0.3"
+mkdocs-pdf = ">=0.1.2, <0.2"
+mkdocs-with-pdf = ">=0.9.3, <0.10"
+mkdocs-simple-hooks = ">=0.1.5, <0.2"
+supriya-midi = ">=26.5b0, <27"

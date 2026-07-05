@@ -6,7 +6,7 @@ from enum import Enum
 from pathlib import Path
 import threading
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mmm_audio.MLP_Python import train_new_mlp
 from mmm_python import *
@@ -1759,7 +1759,7 @@ class MLPPanel(StateSaver,QGroupBox):
         options = QFileDialog.Options()
         options |= QFileDialog.ReadOnly
 
-        rel_path = Path("user_files/instrument/mlp_trainings")
+        rel_path = Path("instrument/mlp_trainings")
         abs_path = rel_path.resolve()        
         abs_path.mkdir(parents=True, exist_ok=True)
 
@@ -1810,7 +1810,7 @@ class MLPPanel(StateSaver,QGroupBox):
         learn_rate = 0.001
         epochs = 5000
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        self.traced_model_path = f"user_files/instrument/mlp_trainings/{timestamp}_idx={self.mlp_idx}_{self.current_module}.pt"
+        self.traced_model_path = f"instrument/mlp_trainings/{timestamp}_idx={self.mlp_idx}_{self.current_module}.pt"
         args = (self.x, self.y, layers, learn_rate, epochs, self.traced_model_path)
         self.training_signals = TrainingSignals()
         self.training_signals.finished.connect(self.on_training_complete)
@@ -1895,7 +1895,7 @@ class Instrument(StateSaver):
         self.mmm_audio = MMMAudio(
             blocksize=128, 
             graph_name="Instrument", 
-            package_name="user_files.instrument",
+            package_name="instrument",
             in_device=input_device,
             out_device=output_device,
             num_input_channels=1 if input_device != "none" else 0,
@@ -1917,7 +1917,7 @@ class Instrument(StateSaver):
         palette.setColor(QPalette.Button, QColor(53, 53, 53))
         palette.setColor(QPalette.Highlight, QColor(42, 130, 218))
         app.setPalette(palette)
-        with open("user_files/instrument/style.qss", "r") as f:
+        with open("instrument/style.qss", "r") as f:
             app.setStyleSheet(f.read())
 
         # self.lfo_manager = LFOManager(self.mmm_audio)
@@ -2174,7 +2174,7 @@ class Instrument(StateSaver):
         path, _ = QFileDialog.getSaveFileName(
             parent=None, 
             caption="Save State", 
-            dir="user_files/instrument/_state-saves", 
+            dir="instrument/_state-saves", 
             filter="JSON Files (*.json);;All Files (*)"
         )
         if path:

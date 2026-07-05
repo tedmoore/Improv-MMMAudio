@@ -3,8 +3,8 @@ from std.python import PythonObject, Python, ConvertibleFromPython
 from std.python.bindings import PythonModuleBuilder
 from std.reflection import *
 from std.sys.intrinsics import _type_is_eq
-from user_files.instrument.Instrument import *
-from user_files.instrument.Instrument_Synths import *
+from instrument.Instrument import *
+from instrument.Instrument_Synths import *
 from std.os import abort
 
 # Currently, this needs to be edited so that it contains

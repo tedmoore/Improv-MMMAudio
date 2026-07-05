@@ -1,1 +1,1 @@
-from user_files.instrument.Instrument import *
+from instrument.Instrument import *

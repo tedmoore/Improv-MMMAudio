@@ -8,7 +8,7 @@ from umap import UMAP
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 
 d = {
-    "path": "user_files/resources/shoe-squeak.wav",
+    "path": "resources/shoe-squeak.wav",
     "thresh":10.0,
     "window_size":1024,
     "hop_size":512
@@ -124,7 +124,7 @@ num_frames = (onsets[1:] - onsets[:-1]).tolist()
 out_dict["start_frame_num_frames"] = list(zip(starts, num_frames))
 out_dict["path"] = d["path"]
 
-filename = f"user_files/SampleSpace_{Path(d['path']).stem}.json"
+filename = f"SampleSpace_{Path(d['path']).stem}.json"
 
 import json
 

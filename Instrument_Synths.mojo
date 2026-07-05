@@ -1,7 +1,7 @@
 from mmm_audio import *
-from user_files.instrument.ControlsHandler_module import *
-from user_files.instrument.Instrument import *
-from user_files.instrument.Poly import *
+from instrument.ControlsHandler_module import *
+from instrument.Instrument import *
+from instrument.Poly import *
 from emberjson import deserialize
 from mojmelo.utils.Matrix import Matrix
 from mojmelo.utils.KDTree import KDTreeResultVector, KDTree
