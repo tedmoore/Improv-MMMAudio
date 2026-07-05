@@ -1555,7 +1555,10 @@ class MatrixMixerState(StateSaver, Saveable):
         for dest_i in range(self.num_outputs):
             for src_i in range(self.num_inputs):
                 index = (dest_i * self.num_inputs) + src_i
-                self.sync_widgets(src_i, dest_i, self.coeffs[index])
+                if index < len(self.coeffs):
+                    self.sync_widgets(src_i, dest_i, self.coeffs[index])
+                else:
+                    print(f"Warning: coeffs list is shorter than expected. Expected index {index}, but got {len(self.coeffs)}.")
 
 class TrainingSignals(QObject):
     finished = Signal(str)

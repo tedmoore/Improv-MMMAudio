@@ -410,19 +410,24 @@ struct SpecFreeze(Modulable):
 
 struct AmpMod(Modulable):
     var world: World
-    var freq: Float64Control
+    var freq: LagFloat64Control
     var osc: Osc[interp=Interp.linear]
+    var bRingMod: BoolControl
 
     def __init__(out self, world: World):
         self.world = world
-        self.freq = Float64Control(8, 0.1, 10000.0, 5)
+        self.freq = LagFloat64Control(self.world,8, 0.03, 0.5, 10000.0, 5)
         self.osc = Osc[interp=Interp.linear](self.world)
+        self.bRingMod = BoolControl(False)
 
     def get_namespace(self) -> String:
         return "ampmod"
 
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
-        return input * linlin(self.osc.next(self.freq.v),-1,1,0,1)
+        mod = self.osc.next(self.freq.next())
+        if not self.bRingMod.v: # not doing ring mod, means we *are* doing amp mod
+            mod = linlin(mod,-1,1,0,1)
+        return input * mod
 
 struct SpectralSmearVoice(PolyVoiceT):
     var world: World
@@ -1307,3 +1312,54 @@ struct ChromaSus(Modulable):
             )
 
         return out
+
+struct SoftClip(Modulable):
+    comptime ovs: TimesOversampling = TimesOversampling.x2
+    comptime ad_degree: Int = 3
+    var world: World
+    var pregain: LagFloat64Control
+    var postgain: LagFloat64Control
+    var softclip: SoftClipAD[2,Self.ovs,Self.ad_degree]
+
+    def get_namespace(self) -> String:
+        return "softclip"
+
+    def __init__(out self, world: World):
+        self.world = world
+        self.pregain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.postgain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.softclip = SoftClipAD[2,Self.ovs,Self.ad_degree](self.world)
+
+    def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
+        return self.softclip.next(input * dbamp(self.pregain.next())) * dbamp(self.postgain.next())
+
+struct Compress(Modulable):
+    comptime ovs: TimesOversampling = TimesOversampling.none
+    var world: World
+    var threshold: Float64Control
+    var ratio: Float64Control
+    var attack: Float64Control
+    var release: Float64Control
+    var makeup: Float64Control
+    var compressor: Compressor[2,Self.ovs]
+
+    def get_namespace(self) -> String:
+        return "compress"
+
+    def __init__(out self, world: World):
+        self.world = world
+        self.threshold = Float64Control(0, -60, 0)
+        self.ratio = Float64Control(1, 1, 20)
+        self.attack = Float64Control(0.01, 0.001, 1)
+        self.release = Float64Control(0.1, 0.001, 3)
+        self.makeup = Float64Control(0, -24, 24)
+        self.compressor = Compressor[2,Self.ovs](self.world)
+
+    def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
+        return self.compressor.next(
+            input,
+            self.threshold.v,
+            self.ratio.v,
+            self.attack.v,
+            self.release.v
+            ) * dbamp(self.makeup.v)

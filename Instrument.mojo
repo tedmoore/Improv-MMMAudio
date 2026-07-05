@@ -572,7 +572,9 @@ struct Instrument(Movable,Copyable):
     var chorus: ModuleWrapper[Chorus,True]
     var reverb: ModuleWrapper[Reverb,True]
     var ampmod: ModuleWrapper[AmpMod]
-    comptime num_modules: Int = 16
+    var compress: ModuleWrapper[Compress]
+    var softclip: ModuleWrapper[SoftClip]
+    comptime num_modules: Int = 18
 
     def __init__(out self, world: World):
         self.world = world
@@ -613,6 +615,8 @@ struct Instrument(Movable,Copyable):
         self.chorus = ModuleWrapper[Chorus,True](self.world, Chorus(self.world))
         self.reverb = ModuleWrapper[Reverb,True](self.world, Reverb(self.world))
         self.ampmod = ModuleWrapper[AmpMod](self.world, AmpMod(self.world))
+        self.compress = ModuleWrapper(self.world, Compress(self.world))
+        self.softclip = ModuleWrapper(self.world, SoftClip(self.world))
         
     def next(mut self) -> MFloat[2]:
 
@@ -635,6 +639,8 @@ struct Instrument(Movable,Copyable):
             self.chorus.lazy_initialization(self.cr)
             self.reverb.lazy_initialization(self.cr)
             self.ampmod.lazy_initialization(self.cr)
+            self.compress.lazy_initialization(self.cr)
+            self.softclip.lazy_initialization(self.cr)
             self.ch.initialized = True
 
         # RETRIEVE ALL CONTROLS
@@ -675,6 +681,8 @@ struct Instrument(Movable,Copyable):
         self.matmix.provide_input(14,self.chorus.next_from_matmix(self.matmix.get_output_check_used(13, 14), self.cr))
         self.matmix.provide_input(15,self.reverb.next_from_matmix(self.matmix.get_output_check_used(14, 15), self.cr))
         self.matmix.provide_input(16,self.ampmod.next_from_matmix(self.matmix.get_output_check_used(15, 16), self.cr))
+        self.matmix.provide_input(17,self.compress.next_from_matmix(self.matmix.get_output_check_used(16, 17), self.cr))
+        self.matmix.provide_input(18,self.softclip.next_from_matmix(self.matmix.get_output_check_used(17, 18), self.cr))
 
         if self.vol.next() > -130.0:
             out = self.matmix.get_output(Self.num_modules) * dbamp(self.vol.v)

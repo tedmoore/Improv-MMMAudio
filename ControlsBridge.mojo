@@ -60,6 +60,10 @@ def get_controls() -> PythonObject:
         get_controls_from_struct(rev, dict["modules"])
         am = AmpMod(w)
         get_controls_from_struct(am, dict["modules"])
+        compress = Compress(w)
+        get_controls_from_struct(compress, dict["modules"])
+        softclip = SoftClip(w)
+        get_controls_from_struct(softclip, dict["modules"])
 
         # order that the modules are listed in the Instrument fields
         # is the order they'll be displayed in 
