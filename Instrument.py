@@ -1,6 +1,7 @@
 import copy
 from datetime import datetime
 from email import message
+import re
 import sys
 from enum import Enum
 from pathlib import Path
@@ -80,7 +81,7 @@ class QuNeoPadModes(Enum):
     ON = 2
     NOT_USED = 3
 
-class QuNeoManager:
+class QuNeoManager(StateSaver,Saveable):
     
     # Class-level constants
     PAD_CC_PARAMS = [QuNeoDataTypes.PRESSURE, QuNeoDataTypes.X, QuNeoDataTypes.Y]
@@ -336,18 +337,21 @@ TOGGLE_MODE_COLORS = {
     ToggleMode.INVERTED:  "#e76f51",                 # orange
 }
 
-class HIDManager:
+class HIDManager(StateSaver,Saveable):
     """A simple class to manage HID devices and their controls."""
 
-    def __init__(self):
-
+    def __init__(self, n_states: int):
+        super().__init__()
         self.learning = False
         self.learning_gui_id: Optional[str] = None
         self.gui_id_to_assign_buttons = {}  # gui_id -> AssignmentButton
         self.gui_id_to_gui = {}  # gui_id -> GUI control (SliderA, NumberBoxA, ToggleA, etc.)
-        self.hid_to_gui_id = {}  # hidaddr -> gui_id
+        self.hid_to_gui_id: list[dict] = [{} for _ in range(n_states)]  # hidaddr -> gui_id
+        self.add_save_attr('hid_to_gui_id')
         self.hid_to_gui_id_states = {}
-        self.ports = []
+        self.add_save_attr('hid_to_gui_id_states')
+        self.midi_ports = []
+        self.current_state = 0
 
         self.supriya2hidmsg = {
             supriya_midi.messages.ControllerChangeMessage: lambda msg_dc, prefix: HIDMsg(f"{prefix}.chan{msg_dc.channel_id}.cc.{msg_dc.controller_number}", msg_dc.controller_value / 127.0),
@@ -359,6 +363,16 @@ class HIDManager:
         self.bridge = HIDBridge()
         self.bridge.hid_signal.connect(self._process_hid_main_thread)
         self.connect_midi()
+        
+    def switch_to_state(self,current_state: int):
+        self.current_state = current_state
+        
+        # unsticky all handles
+        for gui in self.gui_id_to_gui.values():
+            if hasattr(gui, 'is_sticked'):
+                gui.is_sticked = False
+        
+        self.update_assign_buttons()
 
     def connect_midi(self):
         midi_out_tmp = MidiOut()
@@ -367,6 +381,7 @@ class HIDManager:
             midi_output_names=list(midi_out_devices.keys()),
             hid_manager=self
             )
+        self.add_saveable_item('quneo', self.quneo)
         del midi_out_tmp
         print("MIDI output devices (Supriya):", list(midi_out_devices.keys()))
 
@@ -379,7 +394,7 @@ class HIDManager:
             port_index = midi_in_devices['nanoKONTROL2 SLIDER/KNOB']
             port = MidiIn().open_port(port_index)
             port.set_callback(lambda message, timestamp, data=None: self.supriya_midiin(message, timestamp, data='nk'))
-            self.ports.append(port)
+            self.midi_ports.append(port)
             print(f"Opened MIDI input port: 'nanoKONTROL2 SLIDER/KNOB'")
         else:
             print(f"\033[1;33mWarning: 'nanoKONTROL2 SLIDER/KNOB' MIDI device not found.\033[0m")
@@ -388,7 +403,7 @@ class HIDManager:
             port_index = midi_in_devices['Oxygen 25']
             port = MidiIn().open_port(port_index)
             port.set_callback(lambda message, timestamp, data=None: self.supriya_midiin(message, timestamp, data='oxygen25'))
-            self.ports.append(port)
+            self.midi_ports.append(port)
             print(f"Opened MIDI input port: 'Oxygen 25'")
         else:
             print(f"\033[1;33mWarning: 'Oxygen 25' MIDI device not found.\033[0m")
@@ -397,7 +412,7 @@ class HIDManager:
             port_index = midi_in_devices['TouchOSC Bridge']
             port = MidiIn().open_port(port_index)
             port.set_callback(lambda message, timestamp, data=None: self.supriya_midiin(message, timestamp, data='tosc'))
-            self.ports.append(port)
+            self.midi_ports.append(port)
             print(f"Opened MIDI input port: 'TouchOSC Bridge'")
         else:
             print(f"\033[1;33mWarning: 'TouchOSC Bridge' MIDI device not found.\033[0m")
@@ -406,25 +421,13 @@ class HIDManager:
             port_index = midi_in_devices['QUNEO']
             port = MidiIn().open_port(port_index)
             port.set_callback(lambda message, timestamp, data=None: self.quneo.supriya_midiin(message, timestamp, data))
-            self.ports.append(port)
+            self.midi_ports.append(port)
             print(f"Opened MIDI input port: 'QUNEO'")
         else:
             print(f"\033[1;33mWarning: 'QUNEO' MIDI device not found.\033[0m")
 
-    def save(self) -> dict:
-        d = {}
-        d['hid_to_gui_id'] = self.hid_to_gui_id
-        d['hid_to_gui_id_states'] = self.hid_to_gui_id_states
-        d['quneo'] = self.quneo.save()
-        return d
-
     def load(self, d, is_software_boot = False):
-        self.hid_to_gui_id = d.get('hid_to_gui_id', {})
-        self.quneo.load(d.get('quneo', {}))
-
-        if is_software_boot:
-            self.hid_to_gui_id_states = d.get('hid_to_gui_id_states', {})
-
+        super().load(d)
         self.update_assign_buttons()
 
     def supriya_midiin(self, message, timestamp, data=None):
@@ -441,7 +444,7 @@ class HIDManager:
             if self.gui_id_to_assign_buttons[self.learning_gui_id].is_state_related:
                 self.hid_to_gui_id_states[hidmsg.hidaddr] = self.learning_gui_id
             else:
-                self.hid_to_gui_id[hidmsg.hidaddr] = self.learning_gui_id
+                self.hid_to_gui_id[self.current_state][hidmsg.hidaddr] = self.learning_gui_id
 
             self.learning = False
             self.learning_gui_id = None
@@ -449,9 +452,9 @@ class HIDManager:
         else:
             # not learning
 
-            if hidmsg.hidaddr in self.hid_to_gui_id:
+            if hidmsg.hidaddr in self.hid_to_gui_id[self.current_state]:
                 # see if this hidaddr is mapped to a gui_id, and if so, update the corresponding GUI control
-                gui_id = self.hid_to_gui_id[hidmsg.hidaddr]
+                gui_id = self.hid_to_gui_id[self.current_state][hidmsg.hidaddr]
                 if gui_id in self.gui_id_to_gui:
                     self.gui_id_to_gui[gui_id].set_from_hid(hidmsg.value)
             else:
@@ -471,10 +474,10 @@ class HIDManager:
             self.gui_id_to_gui[gui_id] = gui
 
     def unregister_mapping(self, gui_id: str):
-        hidaddrs_to_remove = [hid for hid, gid in self.hid_to_gui_id.items() if gid == gui_id]
+        hidaddrs_to_remove = [hid for hid, gid in self.hid_to_gui_id[self.current_state].items() if gid == gui_id]
         
         for hid in hidaddrs_to_remove:
-            self.hid_to_gui_id.pop(hid, None)
+            self.hid_to_gui_id[self.current_state].pop(hid, None)
         for hid in hidaddrs_to_remove:
             self.hid_to_gui_id_states.pop(hid, None)
 
@@ -485,7 +488,7 @@ class HIDManager:
 
     def update_assign_buttons(self):
         # figure out what gui_ids are currently mapped to a HID
-        mapped_gui_ids = set(self.hid_to_gui_id.values()) | set(self.hid_to_gui_id_states.values())
+        mapped_gui_ids = set(self.hid_to_gui_id[self.current_state].values()) | set(self.hid_to_gui_id_states.values())
         # iterate over all the assign buttons
         for gui_id, btn in self.gui_id_to_assign_buttons.items():
             is_mapped = gui_id in mapped_gui_ids
@@ -497,7 +500,7 @@ class HIDManager:
 
     def close(self):
         self.quneo.close()
-        for port in self.ports:
+        for port in self.midi_ports:
             port.close_port()
 
 class AssignmentButton(QPushButton):
@@ -1515,6 +1518,41 @@ class Module(StateSaver, Saveable):
         self.window.show()
         self.window.raise_()
         self.window.activateWindow()
+        
+class MatrixMixerManager(StateSaver, Saveable):
+    def __init__(self, mmm_audio: MMMAudio, num_inputs: int, num_outputs: int, n_states: int):
+        super().__init__()
+        self.mmm_audio = mmm_audio
+        self.num_inputs = num_inputs
+        self.num_outputs = num_outputs
+        self.states: list[MatrixMixerState] = [MatrixMixerState(mmm_audio, num_inputs, num_outputs) for _ in range(n_states)]
+        
+    def update(self, state_idx: int, source_idx: int, dest_idx: int, value: float):
+        if 0 <= state_idx < len(self.states):
+            self.states[state_idx].update(source_idx, dest_idx, value)
+        else:
+            print(f"Invalid state index: {state_idx}")
+    
+    def switch_to_state(self, state_idx: int):
+        if 0 <= state_idx < len(self.states):
+            self.states[state_idx].update_mojo()
+        else:
+            print(f"Invalid state index: {state_idx}")
+        
+    def save(self) -> dict:
+        return {"states": [state.save() for state in self.states]}
+
+    def load(self, d: dict, is_software_boot: bool = False):
+        states_data = d.get("states", [])
+        for idx, state in enumerate(self.states):
+            if idx < len(states_data):
+                state.load(states_data[idx], is_software_boot=is_software_boot)
+            else:
+                state.load({}, is_software_boot=is_software_boot)
+                
+    def register_widget(self, src_i: int, dest_i: int, widget):
+        for state in self.states:
+            state.register_widget(src_i, dest_i, widget)
 
 class MatrixMixerState(StateSaver, Saveable):
     def __init__(self, mmm_audio: MMMAudio, num_inputs: int, num_outputs: int):
@@ -1548,9 +1586,7 @@ class MatrixMixerState(StateSaver, Saveable):
                 widget.value(value)
                 widget.handle.blockSignals(False)
     
-    def load(self, d: dict, is_software_boot: bool = False):
-        # overwriting this load method to load them from the saved state and then send them to Mojo
-        super().load(d, is_software_boot=is_software_boot)
+    def update_mojo(self):
         self.mmm_audio.send_floats("instrument.matrix_mixer_coeffs", self.coeffs)
         for dest_i in range(self.num_outputs):
             for src_i in range(self.num_inputs):
@@ -1559,6 +1595,11 @@ class MatrixMixerState(StateSaver, Saveable):
                     self.sync_widgets(src_i, dest_i, self.coeffs[index])
                 else:
                     print(f"Warning: coeffs list is shorter than expected. Expected index {index}, but got {len(self.coeffs)}.")
+    
+    def load(self, d: dict, is_software_boot: bool = False):
+        # overwriting this load method to load them from the saved state and then send them to Mojo
+        super().load(d, is_software_boot=is_software_boot)
+        self.update_mojo()
 
 class TrainingSignals(QObject):
     finished = Signal(str)
@@ -1881,20 +1922,21 @@ class MLPPanel(StateSaver,QGroupBox):
 
 class Instrument(StateSaver):
 
-    def __init__(self, load_state=None, input_device: Optional[str] = "default", output_device: Optional[str] = "default", test_input_file: Optional[str] = None):
+    def __init__(self, load_path=None, input_device: Optional[str] = "default", output_device: Optional[str] = "default", test_input_file: Optional[str] = None):
 
         super().__init__()
 
         self.controlparams = ControlsBridge.get_controls()
-
-        self.stored_states = list[Optional[dict]](None for _ in range(10))  # 10 slots for storing routings]
+        
+        self.n_states = 10
+        self.current_state = 0
+        self.add_save_attr('current_state')
 
         app = QApplication([])
 
-        self.hid_manager = HIDManager()
-
+        self.hid_manager = HIDManager(self.n_states)
         self.add_saveable_item("hid_manager", self.hid_manager)
-
+        
         self.mmm_audio = MMMAudio(
             blocksize=128, 
             graph_name="Instrument", 
@@ -1934,7 +1976,13 @@ class Instrument(StateSaver):
         main_window.setWindowTitle("Main")
         main_window.resize(600, 600)
         main_window.closeEvent = self.close
-        main_layout = QHBoxLayout() # tabs, volume slider
+        main_layout = QVBoxLayout()
+        
+        self.main_layout_row_1 = QHBoxLayout()
+        self.create_states_buttons()
+        main_layout.addLayout(self.main_layout_row_1, stretch=0)
+        
+        main_layout_row_2 = QHBoxLayout() # tabs, volume slider
 
         tabs = QTabWidget()
 
@@ -1944,14 +1992,16 @@ class Instrument(StateSaver):
             modules[name] = Module(name, self.controlparams["modules"][name], self.mmm_audio, hid_manager=self.hid_manager)
             self.add_saveable_item(name, modules[name])  # so that the module gets saved/loaded with the instrument
 
-        self.matrix_mixer_state = MatrixMixerState(mmm_audio=self.mmm_audio, num_inputs=len(modules) + 1, num_outputs=len(modules) + 1)
-        self.add_saveable_item("matrix_mixer_state", self.matrix_mixer_state)  # so that the matrix mixer state gets saved/loaded with the instrument
-
-        # states tab ======================================================
+        self.matrix_mixer_manager = MatrixMixerManager(
+            mmm_audio=self.mmm_audio, 
+            num_inputs=len(modules) + 1, 
+            num_outputs=len(modules) + 1, 
+            n_states=self.n_states)
+        
+        self.add_saveable_item('matrix_mixer_manager',self.matrix_mixer_manager)
 
         tabs.addTab(self.create_modules_tab(modules), "Modules")
         tabs.addTab(self.create_matrix_tab(modules), "Matrix")
-        tabs.addTab(self.create_states_tab(), "States")
         tabs.addTab(self.create_mlps_tab(modules,self.controlparams['num_mlps'],self.controlparams['mlp_max_inputs']), "MLPs")
         # tabs.addTab(self.lfo_manager.tab, "LFOs")
 
@@ -1979,15 +2029,20 @@ class Instrument(StateSaver):
         mainvolsl.setFixedWidth(60)
         right_layout.addWidget(mainvolsl)
 
-        main_layout.addWidget(tabs, stretch=1)
-        main_layout.addLayout(right_layout, stretch=0)
-
+        main_layout_row_2.addWidget(tabs, stretch=1)
+        main_layout_row_2.addLayout(right_layout, stretch=0)
+        main_layout.addLayout(main_layout_row_2, stretch=1)
+        
         main_window.setLayout(main_layout)
         main_window.show()
 
-        if load_state:
-            with open(load_state, "r") as f:
+        self.load_path: Optional[str] = None
+        if load_path:
+            self.load_path = load_path
+            with open(load_path, "r") as f:
                 self.load(json.load(f), is_software_boot=True)
+        else:
+            self.switch_to_state(0)
 
         self.mmm_audio.start_audio()
 
@@ -2038,7 +2093,7 @@ class Instrument(StateSaver):
                     spec=ControlSpec(-130, 0, 0.125),
                     default=-130.0,
                     decimals=1,
-                    callback=lambda v, s=src_i, d=dest_i: self.matrix_mixer_state.update(s, d, v),
+                    callback=lambda v, s=src_i, d=dest_i: self.matrix_mixer_manager.update(self.current_state, s, d, v),
                     assign_button=False,
                     run_callback_on_init=False,
                     color_by_value=True,
@@ -2059,7 +2114,7 @@ class Instrument(StateSaver):
                 cell.setLayout(cell_layout)
 
                 grid.addWidget(cell, dest_i + 1, src_i + 1)
-                self.matrix_mixer_state.register_widget(src_i, dest_i, nb)
+                self.matrix_mixer_manager.register_widget(src_i, dest_i, nb)
 
         dest_label_col = len(src_names) + 1
         for dest_i, dest_name in enumerate(dest_names):
@@ -2082,52 +2137,51 @@ class Instrument(StateSaver):
 
         return matrix_tab
 
-    def create_states_tab(self):
-        states_tab = QWidget()
-        states_tab_layout = QVBoxLayout()
-        states_tab.setLayout(states_tab_layout)
+    def create_states_buttons(self):
 
-        save_btn = QPushButton("Save to Disk")
+        save_btn = QPushButton("Save")
         save_btn.setFixedWidth(120)
-        save_btn.clicked.connect(self.save_to_disk)
-        states_tab_layout.addWidget(save_btn)
+        save_btn.clicked.connect(self.open_save_dialog)
+        self.main_layout_row_1.addWidget(save_btn)
+        
+        save_btn = QPushButton("Save++")
+        save_btn.setFixedWidth(120)
+        save_btn.clicked.connect(self.increment_and_write_to_disk)
+        self.main_layout_row_1.addWidget(save_btn)
 
-        row2 = QHBoxLayout()
+        self.main_layout_row_1.addWidget(QLabel("State Stores:"))
+        
+        self.states_buttons = []
 
-        row2.addWidget(QLabel("State Save Slots:"))
+        for i in range(self.n_states):
 
-        for i in range(len(self.stored_states)):
             store_btn = ButtonA(
                 text=f"{i}",
-                callback=lambda slot=i: self.stored_states.__setitem__(slot, copy.deepcopy(self.save())),
+                callback=lambda slot=i: self.switch_to_state(slot),
                 assign_button=True,
                 gui_id=f"state_slot_save_{i}",
                 hid_manager=self.hid_manager,
                 is_state_store_or_recall=True
             )
-            row2.addWidget(store_btn)
+            
+            self.states_buttons.append(store_btn)
 
-        states_tab_layout.addLayout(row2)
-
-        row3 = QHBoxLayout()
-
-        row3.addWidget(QLabel("State Recall Slots:"))
-
-        for i in range(len(self.stored_states)):
-            recall_btn = ButtonA(
-                text=f"{i}",
-                callback=lambda slot=i: self.load(self.stored_states.__getitem__(slot), is_software_boot=False),
-                assign_button=True,
-                gui_id=f"state_slot_recall_{i}",
-                hid_manager=self.hid_manager,
-                is_state_store_or_recall=True
-            )
-            row3.addWidget(recall_btn)
-
-        states_tab_layout.addLayout(row3)
-        states_tab_layout.addStretch()
-
-        return states_tab
+            self.main_layout_row_1.addWidget(store_btn)
+            
+    def switch_to_state(self, slot: int):
+        if 0 <= slot < self.n_states:
+            self.current_state = slot
+            self.matrix_mixer_manager.switch_to_state(self.current_state)
+            self.hid_manager.switch_to_state(self.current_state)
+            
+            for i, button in enumerate(self.states_buttons):
+                if i == slot:
+                    button.button.setStyleSheet("background-color: #2bf1fb; color: black")  # Highlight the active state
+                else:
+                    button.button.setStyleSheet("")  # Reset all other buttons to default style
+            
+        else:
+            print(f"Invalid state slot: {slot}")
     
     def create_modules_tab(self,modules: dict[str, Module]):
         modules_tab = QWidget()
@@ -2157,23 +2211,12 @@ class Instrument(StateSaver):
     def on_key_release(self, event):
         self.hid_manager.keyin(event.text(), 0.0)
         # print(f"Key released: {event.text()!r}, key: {event.key()}")
-
-    def save(self) -> dict:
-        d = super().save()
-        d['stored_states'] = self.stored_states
-        return d
     
     def load(self, d: dict, is_software_boot = False):
-        if d is None:
-            print("No state to load.")
-            return
-        
         super().load(d, is_software_boot = is_software_boot)
+        self.switch_to_state(d.get('current_state',0))
 
-        if is_software_boot:
-            self.stored_states = d.get('stored_states', [None] * 10)
-
-    def save_to_disk(self):
+    def open_save_dialog(self):
         path, _ = QFileDialog.getSaveFileName(
             parent=None, 
             caption="Save State", 
@@ -2181,14 +2224,51 @@ class Instrument(StateSaver):
             filter="JSON Files (*.json);;All Files (*)"
         )
         if path:
-            try:
-                json.dumps(self.save())  # Test if the data can be serialized
-            except TypeError as e:
-                print(f"Error serializing state: {e}")
-                QMessageBox.critical(None, "Error", f"Failed to serialize state: {e}")
-                return
-            with open(path, "w") as f:
-                json.dump(self.save(), f)
+            if self.write_to_disk(path):
+                self.load_path = path
+    
+    def write_to_disk(self, path: str) -> bool: # return success or failure
+        
+        try:
+            json.dumps(self.save())  # Test if the data can be serialized
+        except TypeError as e:
+            print(f"Error serializing state: {e}")
+            QMessageBox.critical(None, "Error", f"Failed to serialize state: {e}")
+            return False
+        
+        with open(path, "w") as f:
+            json.dump(self.save(), f)
+            print(f"State saved to {path}")
+            return True
+    
+    def increment_and_write_to_disk(self):
+        if not self.load_path:
+            self.open_save_dialog()
+        else:
+            p = Path(self.load_path)
+            
+            # Search for any digits at the very end of the filename (stem)
+            match = re.search(r'(\d+)$', p.stem)
+            
+            if match:
+                # Separate the text before the number and the number itself
+                base_name = p.stem[:match.start()]
+                current_num = int(match.group())
+                
+                # Increment and format to guarantee at least 3 digits (e.g., 001, 042)
+                new_stem = f"{base_name}{current_num + 1:03d}"
+            else:
+                # If no digits are found at the end, append "_000"
+                new_stem = f"{p.stem}_000"
+                
+            # Reconstruct the full path with the new stem and original suffix
+            new_path = str(p.with_name(new_stem + p.suffix))
+            
+            print(f"Incrementing save file to: {new_path}")
+            
+            if self.write_to_disk(new_path):
+                self.load_path = new_path
+
 
 def main():
     parser = argparse.ArgumentParser(description="Run the Benjolin-inspired Synthesizer")
@@ -2212,7 +2292,7 @@ def main():
     Instrument(
         input_device=args.input_device,
         output_device=args.output_device,
-        load_state=args.load,
+        load_path=args.load,
         test_input_file=args.test_input_file
         )
 
