@@ -4,16 +4,18 @@ struct InstrumentMatrixMixer(Movable, Copyable):
     var inputs: List[MFloat[2]]
     var input_reaches_output: List[Bool]
     var num_outputs: Int
-    var coeffs: List[Float64]
+    var coeff_envs: List[ASREnv]
+    var coeff_bools: List[Bool]
     var reaches_speakers_tmp: List[Bool]
     var output_to_downstream_input: List[Int]  # maps output_idx -> input_idx that receives it (-1 if none/speakers)
     var speaker_output_idx: Int
 
-    def __init__(out self, num_inputs: Int, num_outputs: Int, speaker_output_idx: Int, output_to_downstream_input: List[Int]):
+    def __init__(out self, world: World, num_inputs: Int, num_outputs: Int, speaker_output_idx: Int, output_to_downstream_input: List[Int]):
         self.inputs = List[MFloat[2]](length=num_inputs, fill=0.0)
         self.input_reaches_output = List[Bool](length=num_inputs, fill=False)
         self.num_outputs = num_outputs
-        self.coeffs = List[Float64](length=self.num_outputs * num_inputs, fill=-130.0)
+        self.coeff_envs = List[ASREnv](length=self.num_outputs * num_inputs, fill=ASREnv(world))
+        self.coeff_bools = List[Bool](length=self.num_outputs * num_inputs, fill=False)
         self.reaches_speakers_tmp = List[Bool](length=num_inputs, fill=False)
         self.output_to_downstream_input = output_to_downstream_input.copy()
         self.speaker_output_idx = speaker_output_idx
@@ -26,7 +28,7 @@ struct InstrumentMatrixMixer(Movable, Copyable):
 
     def coeff_reaches_output(self, input_idx: Int, output_idx: Int) -> Bool:
         idx: Int = self.io_to_idx(input_idx, output_idx)
-        return self.coeffs[idx] > -130.0
+        return self.coeff_bools[idx]
 
     def update_is_used(mut self):
         num_inputs: Int = len(self.inputs)
@@ -68,10 +70,11 @@ struct InstrumentMatrixMixer(Movable, Copyable):
         # for i in range(len(self.inputs)):
         #     print(t"Input {i}: {self.input_reaches_output[i]}")
 
-    def get_output(self, output_index: Int) -> MFloat[2]:
+    def get_output(mut self, output_index: Int) -> MFloat[2]:
         out = MFloat[2](0.0)
         for i in range(len(self.inputs)):
-            out += self.inputs[i] * dbamp(self.coeffs[self.io_to_idx(i, output_index)])
+            gate = self.coeff_bools[self.io_to_idx(i, output_index)]
+            out += self.inputs[i] * self.coeff_envs[self.io_to_idx(i, output_index)].next(0.03,1,0.03,gate)
         return out
 
     def get_output_check_used(mut self, o_idx: Int, i_idx: Int) -> Tuple[MFloat[2], Bool]:

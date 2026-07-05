@@ -587,6 +587,7 @@ struct Instrument(Movable,Copyable):
         output_to_downstream.append(-1)  # speaker output has no downstream
 
         self.matmix = InstrumentMatrixMixer(
+            world=self.world,
             num_inputs=Self.num_modules + Self.num_inputs,
             num_outputs=Self.num_modules + 1, # just one stereo output
             speaker_output_idx=Self.num_modules,
@@ -646,7 +647,7 @@ struct Instrument(Movable,Copyable):
         # RETRIEVE ALL CONTROLS
         self.cr.retrieve_from_python()
         # self.ch.retrieve_from_python()
-        if self.ch.notify_update("instrument.matrix_mixer_coeffs", self.matmix.coeffs):
+        if self.ch.notify_update("instrument.matrix_mixer_coeffs", self.matmix.coeff_bools):
             self.matmix.update_is_used()
         
         if self.ch.notify_update("instrument.test_input_file", self.test_input_file.path):

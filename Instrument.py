@@ -772,6 +772,36 @@ class NumberBoxA(HandleA):
                 f"QDoubleSpinBox {{ background-color: rgb({r}, {g}, {b}); color: black; }}"
             )
 
+class RotatedLabel(QLabel):
+    def __init__(self, text, parent=None):
+        super().__init__(text, parent)
+
+    def paintEvent(self, event):
+            painter = QPainter(self)
+            
+            painter.translate(self.width() / 2, self.height() / 2)
+            painter.rotate(-90) 
+            
+            # Draw the text using the widget's actual alignment!
+            painter.drawText(
+                int(-self.height() / 2), 
+                int(-self.width() / 2), 
+                self.height(), 
+                self.width(), 
+                self.alignment(), # <--- Changed this line
+                self.text()
+            )
+            painter.end()
+
+    # Swap width and height so layout managers allocate space correctly
+    def sizeHint(self):
+        size = super().sizeHint()
+        return QSize(size.height(), size.width())
+
+    def minimumSizeHint(self):
+        size = super().minimumSizeHint()
+        return QSize(size.height(), size.width())
+
 class ToggleA(QWidget):
     """A convenience widget that combines a label, a checkbox, and an assign button."""
     _MODE_CYCLE = [ToggleMode.ADVANCE, ToggleMode.MOMENTARY, ToggleMode.INVERTED]
@@ -847,6 +877,11 @@ class ToggleA(QWidget):
     def value_action(self, value: float):
         self.toggle.setChecked(value > 0.5)
         self.update()
+    
+    def value(self, val: bool):
+        self.toggle.blockSignals(True)
+        self.toggle.setChecked(val)
+        self.toggle.blockSignals(False)
 
     def set_from_hid(self, value: float):
         if self.mode == ToggleMode.ADVANCE:
@@ -859,6 +894,9 @@ class ToggleA(QWidget):
         else:  # INVERTED
             self.toggle.setChecked(value <= 0.5)
             self.update()
+            
+    def get_value(self) -> bool:
+        return self.toggle.isChecked()
 
     def save(self):
         return {"checked": self.toggle.isChecked(), "mode": self.mode.value}
@@ -1560,7 +1598,7 @@ class MatrixMixerState(StateSaver, Saveable):
         self.mmm_audio = mmm_audio
         self.num_inputs = num_inputs
         self.num_outputs = num_outputs
-        self.coeffs = [-130.0] * (num_inputs * num_outputs)
+        self.coeffs = [False] * (num_inputs * num_outputs)
 
         # save the coeffs via them just being a property of this class
         self.add_save_attr("coeffs")
@@ -1573,21 +1611,21 @@ class MatrixMixerState(StateSaver, Saveable):
             self._widgets[key] = []
         self._widgets[key].append(widget)
 
-    def update(self, source_idx: int, dest_idx: int, value: float):
+    def update(self, source_idx: int, dest_idx: int, value: bool):
         index = (dest_idx * self.num_inputs) + source_idx
         self.coeffs[index] = value
-        self.mmm_audio.send_floats("instrument.matrix_mixer_coeffs", self.coeffs)
+        self.mmm_audio.send_bools("instrument.matrix_mixer_coeffs", self.coeffs)
         self.sync_widgets(source_idx, dest_idx, value)
 
-    def sync_widgets(self, source_idx: int, dest_idx: int, value: float):
+    def sync_widgets(self, source_idx: int, dest_idx: int, value: bool):
         for widget in self._widgets.get((source_idx, dest_idx), []):
-            if abs(widget.get_value() - value) > 1e-6:
-                widget.handle.blockSignals(True)
+            if widget.get_value() != value:
+                widget.toggle.blockSignals(True)
                 widget.value(value)
-                widget.handle.blockSignals(False)
+                widget.toggle.blockSignals(False)
     
     def update_mojo(self):
-        self.mmm_audio.send_floats("instrument.matrix_mixer_coeffs", self.coeffs)
+        self.mmm_audio.send_bools("instrument.matrix_mixer_coeffs", self.coeffs)
         for dest_i in range(self.num_outputs):
             for src_i in range(self.num_inputs):
                 index = (dest_i * self.num_inputs) + src_i
@@ -2038,6 +2076,53 @@ class Instrument(StateSaver):
 
         self.load_path: Optional[str] = None
         if load_path:
+            p = Path(load_path)
+            if p.parent.exists():
+                # 1. Determine the base name and current increment number
+                # Added '_?' to optionally catch the underscore so it's removed from the base_name
+                match = re.search(r'_?(\d+)$', p.stem)
+                if match:
+                    base_name = p.stem[:match.start()]
+                    target_num = int(match.group(1)) # Use group(1) to grab only the digits
+                else:
+                    base_name = p.stem
+                    target_num = -1  # Represents "older than 000"
+
+                latest_file = p
+                max_num = target_num
+
+                # 2. Scan the directory for the latest incremented file
+                for sibling in p.parent.glob(f"*{p.suffix}"):
+                    if not sibling.is_file():
+                        continue
+
+                    sibling_match = re.search(r'_?(\d+)$', sibling.stem)
+                    
+                    # File has a number suffix and matches the base name
+                    if sibling_match and sibling.stem[:sibling_match.start()] == base_name:
+                        s_num = int(sibling_match.group(1))
+                    # File matches the base name but has no number suffix
+                    elif sibling.stem == base_name:
+                        s_num = -1
+                    else:
+                        continue # Unrelated file
+
+                    if s_num > max_num:
+                        max_num = s_num
+                        latest_file = sibling
+
+                # 3. If a newer file is found, prompt the user
+                if max_num > target_num:
+                    reply = QMessageBox.question(
+                        main_window,
+                        "Newest File Available",
+                        f"A newer version of this file was found:\n{latest_file.name}\n\nWould you like to load this latest version instead?",
+                        QMessageBox.Yes | QMessageBox.No,
+                        QMessageBox.Yes
+                    )
+                    if reply == QMessageBox.Yes:
+                        load_path = str(latest_file)
+
             self.load_path = load_path
             with open(load_path, "r") as f:
                 self.load(json.load(f), is_software_boot=True)
@@ -2047,7 +2132,6 @@ class Instrument(StateSaver):
         self.mmm_audio.start_audio()
 
         sys.exit(app.exec())
-
     def create_mlps_tab(self, modules: dict[str, Module], num_mlps: int, mlp_max_inputs: int):
         mlps_tab = QWidget()
         mlps_tab_layout = QVBoxLayout()
@@ -2067,53 +2151,34 @@ class Instrument(StateSaver):
         matrix_tab.setLayout(matrix_tab_layout)
     
         # Build matrix grid
-        dest_names = list(modules.keys()) + ["Output"]
-        src_names = ["Input"] + list(modules.keys())
+        dest_names = list(modules.keys()) + ["Output 🔈"]
+        src_names = ["Input 🎤"] + list(modules.keys())
         grid = QGridLayout()
         grid.setSpacing(2)
 
-        # Top-left corner label
-        corner_label = QLabel("")
-        grid.addWidget(corner_label, 0, 0)
+        top_left_corner = QLabel("Sources →\nDestinations ↓")
+        grid.addWidget(top_left_corner, 0, 0)
 
         # Source headers across the top (columns)
         for src_i, src_name in enumerate(src_names):
-            col_label = QLabel(src_name)
-            col_label.setAlignment(Qt.AlignLeft)
+            col_label = RotatedLabel(src_name)
+            col_label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             grid.addWidget(col_label, 0, src_i + 1)
         
         # Build the matrix cells - rows are destinations, columns are sources
         for dest_i, dest_name in enumerate(dest_names):
             for src_i, src_name in enumerate(src_names):
-                nb = NumberBoxA(
+                nb = ToggleA(
                     label="",
-                    mmm_audio=self.mmm_audio,
                     hid_manager=self.hid_manager,
-                    dtype=float,
-                    spec=ControlSpec(-130, 0, 0.125),
-                    default=-130.0,
-                    decimals=1,
+                    default=False,
                     callback=lambda v, s=src_i, d=dest_i: self.matrix_mixer_manager.update(self.current_state, s, d, v),
                     assign_button=False,
-                    run_callback_on_init=False,
-                    color_by_value=True,
+                    run_callback_on_init=False
                 )
                 nb.label.hide()
-                nb.display.hide()
-                nb._update_text_display()
 
-                cell = QWidget()
-                cell_layout = QHBoxLayout()
-                cell_layout.setContentsMargins(0, 0, 0, 0)
-                cell_layout.setSpacing(1)
-                cell_layout.addWidget(nb)
-                btn_toggle = QPushButton("^")
-                btn_toggle.setFixedSize(18, 18)
-                btn_toggle.clicked.connect(lambda _, n=nb: n.value_action(-130.0 if n.get_value() >= 0.0 else 0.0))
-                cell_layout.addWidget(btn_toggle)
-                cell.setLayout(cell_layout)
-
-                grid.addWidget(cell, dest_i + 1, src_i + 1)
+                grid.addWidget(nb, dest_i + 1, src_i + 1)
                 self.matrix_mixer_manager.register_widget(src_i, dest_i, nb)
 
         dest_label_col = len(src_names) + 1
@@ -2125,15 +2190,24 @@ class Instrument(StateSaver):
             dest_label_R = QLabel(dest_name)
             dest_label_R.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             grid.addWidget(dest_label_R, dest_i + 1, dest_label_col)
+        
+        # Source headers across the bottom (columns)
+        for src_i, src_name in enumerate(src_names):
+            col_label = RotatedLabel(src_name)
+            col_label.setAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+            grid.addWidget(col_label, len(dest_names) + 1, src_i + 1)
+            
+        top_right_corner = QLabel("← Sources\nDestinations ↑")
+        grid.addWidget(top_right_corner, len(dest_names) + 1, dest_label_col)
 
-        dest_header = QLabel("Destinations")
-        dest_header.setAlignment(Qt.AlignLeft)
-        grid.addWidget(dest_header, len(dest_names) + 1, dest_label_col)
+        # Create a horizontal wrapper to hold the grid and a stretch space
+        h_wrapper = QHBoxLayout()
+        h_wrapper.addLayout(grid)
+        h_wrapper.addStretch() # Pushes the grid tightly to the left
 
-        corner_label.setText("Sources →")
-
-        matrix_tab_layout.addLayout(grid)
-        matrix_tab_layout.addStretch()
+        # Add the wrapped grid to your main vertical layout
+        matrix_tab_layout.addLayout(h_wrapper)
+        matrix_tab_layout.addStretch() # Pushes the grid tightly to the top
 
         return matrix_tab
 

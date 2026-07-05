@@ -5,20 +5,20 @@
 * module panels can be smaller: the text boxes and such need to be smaller
 * Modules
   * [x] Chroma
+  * [ ] PShiftDel
   * [ ] Squabble
   * [ ] WavesetLooper
   * [ ] Looper
   * [ ] Mags Autoencoder
   * [ ] SampleSpace (multi files)
-  * [ ] SPEARPlayer (separate out data creation)  
+  * [ ] SPEARPlayer (separate out data creation)
   * [ ] 2D Wavetable player (implement "KeyboardControl" struct)
-  * [ ] RingMod
   * [ ] PitchToSynth
   * [ ] DirtyFM
   * [ ] Decimator
   * [ ] Granulator
-  * [ ] PShiftDel
   * [ ] FM but more interesting
+  * [x] RingMod
   * [x] Filter
   * [x] Squiz
   * [x] SpectralSmear (polyphony) (stereoify)

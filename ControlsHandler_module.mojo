@@ -71,6 +71,17 @@ struct ControlsHandler(Movable, Copyable):
             except e:
                 print("Error in ControlsHandler notify_update: ", e)
         return False
+    
+    def notify_update(self, name: String, mut value: List[Bool]) -> Bool:
+        if self.world[].top_of_block():
+            try:
+                fo = self.world[].messenger_manager().get_bools(name)
+                if fo:
+                    value = fo.value().copy()
+                    return True
+            except e:
+                print("Error in ControlsHandler notify_update: ", e)
+        return False
 
     def notify_update(self, name: String, mut value: String) -> Bool:
         if self.world[].top_of_block():

@@ -1048,9 +1048,9 @@ struct SampColl(Modulable):
         for p in paths:
             # print("SampColl loading ",p)
             self.bufs.append(SIMDBuffer[1].load(p))
-        self.grains = List[SampCollGrain](length=10,fill=SampCollGrain(self.world))
+        self.grains = List[SampCollGrain](length=40,fill=SampCollGrain(self.world))
 
-        self.trig_rate = Float64Control(1.0, 0.1, 20.0, 0.25)
+        self.trig_rate = Float64Control(1.0, 0.1, 20.0, 4)
         self.impulse = Impulse[](self.world)
 
         self.random_rate = BoolControl(False)
