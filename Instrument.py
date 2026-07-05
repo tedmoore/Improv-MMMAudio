@@ -1479,7 +1479,7 @@ class ModulePanel(StateSaver, QGroupBox):
             label="Vol",
             mmm_audio=mmm_audio,
             hid_manager=hid_manager,
-            spec=ControlSpec(-130.0, 0.0, 0.125),
+            spec=ControlSpec(-130.0, 12.0, 0.3),
             default=0.0,
             callback=lambda v, key=f"{ns}.mw.vol": mmm_audio.send_float(key, v),
             assign_button=True,

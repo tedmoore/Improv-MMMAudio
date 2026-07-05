@@ -159,23 +159,23 @@ struct ModuleWrapper[T:Modulable,keep_running:Bool=False](Movable, Copyable):
     var vol: LagFloat64Control
     var mix: LagFloat64Control
     var bypass: BoolControl
-    var bypass_lag: Lag[]
+    var bypass_env: ASREnv
     var stop: BoolControl
-    var stop_lag: Lag[]
+    var stop_env: ASREnv
     var matrix_mixer_indicates_being_used: Bool
-    var matmix_lag: Lag[]
+    var matmix_env: ASREnv
 
     def __init__(out self, world: World, var module: Self.T):
         self.world = world
         self.vol = LagFloat64Control(self.world,0.0, 0.03, -130.0, 0, 8)
         self.mix = LagFloat64Control(self.world,1.0, 0.03, 0, 1)
         self.bypass = BoolControl(False)
-        self.bypass_lag = Lag(self.world, 0.03)
+        self.bypass_env = ASREnv(self.world)
         self.stop = BoolControl(False)
-        self.stop_lag = Lag(self.world, 0.03)
+        self.stop_env = ASREnv(self.world)
         self.module = module^
         self.matrix_mixer_indicates_being_used = False
-        self.matmix_lag = Lag(self.world, 0.03)
+        self.matmix_env = ASREnv(self.world)
 
     def next_from_matmix(mut self, input: Tuple[MFloat[2],Bool], mut cr: ControlsRegistry) -> MFloat[2]:
         self.matrix_mixer_indicates_being_used = input[1]
@@ -190,9 +190,9 @@ struct ModuleWrapper[T:Modulable,keep_running:Bool=False](Movable, Copyable):
 
         input = sanitize(input)
 
-        stop_env: Float64 = self.stop_lag.next(0.0 if self.stop.v else 1.0)
-        bypass_env: Float64 = self.bypass_lag.next(0.0 if self.bypass.v else 1.0)
-        matmix_env: Float64 = self.matmix_lag.next(0.0 if self.matrix_mixer_indicates_being_used else 1.0)
+        stop_env: Float64 = self.stop_env.next(0.03,1.0,0.03,gate=not self.stop.v)
+        bypass_env: Float64 = self.bypass_env.next(0.03,1.0,0.03,gate=not self.bypass.v)
+        matmix_env: Float64 = self.matmix_env.next(0.03,1.0,0.03,gate=not self.matrix_mixer_indicates_being_used)
         mixv = self.mix.next()
         volv = self.vol.next()
 
