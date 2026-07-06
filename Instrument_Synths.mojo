@@ -272,46 +272,51 @@ struct SIMDCircleBuffer[num_chans: Int = 1, interp: Interp = Interp.linear](Mova
         return out
 
 struct Stutter(Modulable):
-    comptime bufferdur: Float64 = 8 # seconds
+    comptime bufferdur: Float64 = 2 # seconds
     var world: World
     # var ch: ControlsHandler
     var hold: BoolControl
-    var hold_lag: Lag[]
+    var hold_env: ASREnv
     var buffer: SIMDCircleBuffer[2]
     var phs: Phasor[1]
-    var trand: TExpRand[]
+    var trand: TRand[]
     var loop_dur_secs: Float64
     var min_loop_dur_secs: Float64
     var max_loop_dur_secs: Float64
+    var randomness_pow_warp: Float64Control
 
     def __init__(out self, world: World):
         self.world = world
         # self.ch = ControlsHandler(self.world,"stutter")
         self.hold = BoolControl(False)
-        self.hold_lag = Lag[](self.world,0.03)
+        self.hold_env = ASREnv(self.world)
         self.buffer = SIMDCircleBuffer[2](self.world, Self.bufferdur)
         self.phs = Phasor[1](self.world)
-        self.trand = TExpRand[]()
-        self.min_loop_dur_secs = 0.002
+        self.trand = TRand[]()
+        self.min_loop_dur_secs = 0.03
         self.max_loop_dur_secs = Self.bufferdur
         self.loop_dur_secs = 0
+        self.randomness_pow_warp = Float64Control(2.0, 0.1, 10.0, 2)
+
 
     def get_namespace(self) -> String:
         return "stutter"
 
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
 
-        hold_env = self.hold_lag.next(1.0 if self.hold.v else 0.0)
+        hold_env = self.hold_env.next(0.03,1.0,0.03,self.hold.v)
 
-        loop_dur_secs = self.trand.next(self.min_loop_dur_secs,self.max_loop_dur_secs,self.hold.v)
+        self.loop_dur_secs = linlin(pow(self.trand.next(0,1,self.hold.v),self.randomness_pow_warp.v),0,1,self.min_loop_dur_secs,self.max_loop_dur_secs)
+
+        self.world[].print("loop dur secs: ",self.loop_dur_secs)
 
         if hold_env < neg130db:
             self.buffer.write_next(input * (1-hold_env))
             return input
         else:
-            loopdur_phs: Float64 = loop_dur_secs / Self.bufferdur
+            loopdur_phs: Float64 = self.loop_dur_secs / Self.bufferdur
             phs_offset = 1 - loopdur_phs
-            phsfreq = 1.0 / loop_dur_secs
+            phsfreq = 1.0 / self.loop_dur_secs
             phs = self.phs.next(phsfreq, trig=self.hold.v)
             out = self.buffer.read_phase(phs_offset + (phs * loopdur_phs))
             out = (out * hold_env) + (input * (1-hold_env))
