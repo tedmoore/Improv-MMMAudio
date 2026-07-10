@@ -201,41 +201,97 @@ struct Chorus(Modulable):
 
         return out
 
-struct FilterGlitch(Modulable):
+struct MoogFF[num_chans: Int](Movable,Copyable):
     var world: World
-    var param0: Float64Control
-    var param1: Float64Control
-    var param2: Float64Control
-    var dust: Dust[2]
-    var impulse: Impulse[2]
-    var moog: VAMoogLadder[2]
-    var dctrap: DCTrap[2]
-    var trand: TRand[2]
-    var feedback: MFloat[2]
+    var s1: MFloat[Self.num_chans]
+    var s2: MFloat[Self.num_chans]
+    var s3: MFloat[Self.num_chans]
+    var s4: MFloat[Self.num_chans]
 
     def __init__(out self, world: World):
         self.world = world
-        self.param0 = Float64Control(0, 0, 1)
-        self.param1 = Float64Control(0, 0, 1)
-        self.param2 = Float64Control(0, 0, 1)
+        self.s1 = MFloat[Self.num_chans](0.0)
+        self.s2 = MFloat[Self.num_chans](0.0)
+        self.s3 = MFloat[Self.num_chans](0.0)
+        self.s4 = MFloat[Self.num_chans](0.0)
+
+    def reset(mut self):
+        self.s1 = MFloat[Self.num_chans](0.0)
+        self.s2 = MFloat[Self.num_chans](0.0)
+        self.s3 = MFloat[Self.num_chans](0.0)
+        self.s4 = MFloat[Self.num_chans](0.0)
+
+    def next(mut self, input: MFloat[Self.num_chans], freq: MFloat[Self.num_chans], gain: MFloat[Self.num_chans]) -> MFloat[Self.num_chans]:
+        # Implementation of Dan Stowell's port of Fontana's Moog VCF algorithm
+        
+        # 1. Calculate tuning coefficients
+        var two_pi_over_sr = 2.0 * pi / self.world[].sample_rate 
+        var t0 = freq * two_pi_over_sr
+        var t1 = exp(-t0)
+        var p = MFloat[Self.num_chans](1.0) - t1
+        
+        # 2. Input stage with negative feedback scaled by gain (0 to 4)
+        var in_sig = input - (gain * self.s4)
+        
+        # 3. 4-pole cascading lowpass filters
+        self.s1 = self.s1 + p * (in_sig - self.s1)
+        self.s2 = self.s2 + p * (self.s1 - self.s2)
+        self.s3 = self.s3 + p * (self.s2 - self.s3)
+        self.s4 = self.s4 + p * (self.s3 - self.s4)
+        
+        return self.s4
+
+struct FilterGlitch(Modulable):
+    var world: World
+    var dust_rate: Float64Control
+    var rand_freq_max: Float64Control
+    var fb_gain_db: Float64Control
+    var dust: Dust[2]
+    var impulse: Impulse[2]
+    # var moog: VAMoogLadder[2]
+    var moog: MoogFF[2]
+    var dctrap: DCTrap[2]
+    var texprand: TExpRand[2]
+    var feedback: MFloat[2]
+    var delay_samps: IntControl
+    var res: Float64Control
+
+    var delay: Delay[2,Interp.none]
+    var reset: Dust[]
+
+    def __init__(out self, world: World):
+        self.world = world
+        self.dust_rate = Float64Control(0.1, 0.1, 60)
+        self.rand_freq_max = Float64Control(100, 1, 20000, 5)
+        self.fb_gain_db = Float64Control(0, 0, 20)
         self.dust = Dust[2](self.world)
         self.impulse = Impulse[2](self.world)
-        self.moog = VAMoogLadder[2](self.world)
+        # self.moog = VAMoogLadder[2](self.world)
+        self.moog = MoogFF[2](self.world)
         self.dctrap = DCTrap[2](self.world)
-        self.trand = TRand[2]()
+        self.texprand = TExpRand[2]()
         self.feedback = MFloat[2](0.0)
+        self.delay_samps = IntControl(64, 0, 512)
+        self.res = Float64Control(3.8, 0.0, 4)
+
+        self.delay = Delay[2,Interp.none](self.world, 0.1)
+        self.reset = Dust[](self.world)
     
     def get_namespace(self) -> String:
         return "filterglitch"
 
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
 
-        sig = self.dust.next(self.param0.v * 60)
-        freq = linexp(self.trand.next(0,1,sig.gt(0.5)), 0, 1, 1, linexp(self.param1.v,0,1,1,20000))
-        sig = sig + self.feedback
-        sig = self.moog.next(sig, freq, 8)
+        sig = self.dust.next(self.dust_rate.v)
+        freq = self.texprand.next(1, self.rand_freq_max.v, sig.gt(0.0))
+        # self.world[].print("freq: ", freq)
+        sig = sig + self.delay.next(self.feedback, SIMD[DType.int,2](self.delay_samps.v))
+        # sig = sig + self.feedback
+        if self.reset.next_bool(3):
+            self.moog.reset()
+        sig = self.moog.next(sig, freq, self.res.v)
         sig = tanh(sig)
-        self.feedback = MFloat[2](sig[1], sig[0]) * dbamp(self.param2.v * 20)
+        self.feedback = MFloat[2](sig[1], sig[0]) * dbamp(self.fb_gain_db.v)
         sig = self.dctrap.next(sig)
 
         return sig
@@ -307,8 +363,6 @@ struct Stutter(Modulable):
         hold_env = self.hold_env.next(0.03,1.0,0.03,self.hold.v)
 
         self.loop_dur_secs = linlin(pow(self.trand.next(0,1,self.hold.v),self.randomness_pow_warp.v),0,1,self.min_loop_dur_secs,self.max_loop_dur_secs)
-
-        self.world[].print("loop dur secs: ",self.loop_dur_secs)
 
         if hold_env < neg130db:
             self.buffer.write_next(input * (1-hold_env))
@@ -771,7 +825,10 @@ struct Integrator(Movable, Copyable):
 struct FIN(Modulable):
     comptime times_oversampling: TimesOversampling = TimesOversampling.x2
     comptime n_integrators: Int = 8
+    comptime hop_size: Int = 128
+    comptime delaysamps = SIMD[DType.int,2](Self.hop_size)
     var world: World 
+    var ds_world: World
     var snd: List[Float64]
     var impulse: Impulse[]
     var integrators: List[Integrator]
@@ -781,11 +838,17 @@ struct FIN(Modulable):
     var ffreqs: List[Float64Control]
     var qs: List[Float64Control]
     var gains: List[Float64Control]
-    # var coeffs: List[Float64]
     var randomize: TrigControl
     var initialized: Bool
     var ds: Downsampler[2,Self.times_oversampling]
-    # var impulse_freq: Float64Control didn't change the sound at all
+
+    var mask_prob: Float64Control
+    var onsets: SpectralFluxOnsets
+    var mask_env: ASREnv
+    var mask_bool: Bool
+    var rbd: RisingBoolDetector[]
+
+    var delay: Delay[2]
 
     def get_namespace(self) -> String:
         return "fin"
@@ -794,23 +857,34 @@ struct FIN(Modulable):
 
         self.ds = Downsampler[2,Self.times_oversampling](world)
 
-        self.world = world[].create_subworld(Self.times_oversampling)
-        # self.impulse_freq = Float64Control(0.1, 0.01, 10.0, 0.5)
-        self.impulse = Impulse(self.world)
+        self.world = world
+        self.ds_world = self.world[].create_subworld(Self.times_oversampling)
+
+        self.impulse = Impulse(self.ds_world)
         self.snd = List[Float64](length=Self.n_integrators, fill=0.0)
         self.integrators = List[Integrator](length=Self.n_integrators, fill=Integrator())
         self.matrix_mixer = MatrixMixer(Self.n_integrators, Self.n_integrators)
-        self.dctrap = List[DCTrap[]](length=Self.n_integrators, fill=DCTrap(self.world))
-        self.filters = List[SVF[]](length=Self.n_integrators, fill=SVF(self.world))
+        self.dctrap = List[DCTrap[]](length=Self.n_integrators, fill=DCTrap(self.ds_world))
+        self.filters = List[SVF[]](length=Self.n_integrators, fill=SVF(self.ds_world))
         self.ffreqs = List[Float64Control](length=Self.n_integrators,fill=Float64Control(10.0, 10.0, 1000.0, 1.0, False))
         self.qs = List[Float64Control](length=Self.n_integrators,fill=Float64Control(0.707,0.1,10.0,1,False))
         self.gains = List[Float64Control](length=Self.n_integrators,fill=Float64Control(0.0,-12,12,1,False))
         self.randomize = TrigControl()
         self.initialized = False
 
+        self.mask_prob = Float64Control(0.0, 0.0, 1.0)
+        self.onsets = SpectralFluxOnsets(self.world,window_size=Self.hop_size * 2,hop_size=Self.hop_size,filter_size=5)
+        self.onsets.min_slice_len = 0.05
+        self.mask_env = ASREnv(self.world)
+        self.mask_bool = False
+        self.rbd = RisingBoolDetector[]()
+
+        self.delay = Delay[2](self.ds_world, 0.1)
+
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
 
         if not self.initialized:
+            cr.register("fin.onset_thresh", self.onsets.thresh)
             for o in range(Self.n_integrators):
                 cr.register("fin.freq."+String(o), self.ffreqs[o])
                 cr.register("fin.q."+String(o), self.qs[o])
@@ -835,6 +909,7 @@ struct FIN(Modulable):
             imp = self.impulse.next(0.1)
             for i in range(Self.n_integrators):
                 self.snd[i] = self.integrators[i].next(self.snd[i] + imp, 0.999)
+                # self.snd[i] = self.integrators[i].next(self.feedback[i] + imp, 0.999)
             
             self.matrix_mixer.next(self.snd)
             for i in range(Self.n_integrators):
@@ -850,14 +925,27 @@ struct FIN(Modulable):
             self.snd[7] = self.filters[7].next[FilterType.peak](self.snd[7], self.ffreqs[7].v, self.qs[7].v,self.gains[7].v)
 
             for i in range(Self.n_integrators):
+                # self.feedback[i] = self.delays[i].next[1](self.snd[i], self.deltime.v)
                 self.snd[i] = sanitize(self.snd[i])
-                self.snd[i] = self.dctrap[i].next(self.snd[i])
-                self.snd[i] = tanh(self.snd[i])
-            output = splay(self.snd,self.world)
+                self.snd[i] = self.dctrap[i].next(self.snd[i]) # TODO: try without
+                self.snd[i] = tanh(self.snd[i]) # TODO: try without or with TanhAD or other distortions
 
-            self.ds.add_sample(output)
+            self.ds.add_sample(splay(self.snd,self.world))
 
-        return self.ds.get_sample()
+        output = self.ds.get_sample()
+
+        # self.world[].print("onset thresh:",self.onsets.thresh)
+
+        if self.rbd.next(self.onsets.next(output.reduce_add())):
+            self.mask_bool = random_float64(0.0,1.0) < self.mask_prob.v
+            # print("fin mask_bool: ", self.mask_bool)
+
+        # output = self.delay.next(output, Self.delaysamps)
+            
+        output *= self.mask_env.next(0.01, 1.0, 0.01, not self.mask_bool)
+        # output *= Float64(not self.mask_bool)
+
+        return output
 
 struct LPFilter(Modulable):
     var world: World
@@ -1324,6 +1412,7 @@ struct SoftClip(Modulable):
     var world: World
     var pregain: LagFloat64Control
     var postgain: LagFloat64Control
+    var compensated_pregain: LagFloat64Control
     var softclip: SoftClipAD[2,Self.ovs,Self.ad_degree]
 
     def get_namespace(self) -> String:
@@ -1333,10 +1422,59 @@ struct SoftClip(Modulable):
         self.world = world
         self.pregain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
         self.postgain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.compensated_pregain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
         self.softclip = SoftClipAD[2,Self.ovs,Self.ad_degree](self.world)
 
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
-        return self.softclip.next(input * dbamp(self.pregain.next())) * dbamp(self.postgain.next())
+        cpg = self.compensated_pregain.next()
+        inp = input * dbamp(self.pregain.next()) * dbamp(cpg)
+        return self.softclip.next(inp) * dbamp(self.postgain.next()) * dbamp(-cpg)
+
+struct HardClip(Modulable):
+    comptime ovs: TimesOversampling = TimesOversampling.x2
+    var world: World
+    var pregain: LagFloat64Control
+    var postgain: LagFloat64Control
+    var compensated_pregain: LagFloat64Control
+    var hardclip: HardClipAD[2,Self.ovs]
+
+    def get_namespace(self) -> String:
+        return "hardclip"
+
+    def __init__(out self, world: World):
+        self.world = world
+        self.pregain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.postgain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.compensated_pregain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.hardclip = HardClipAD[2,Self.ovs](self.world)
+
+    def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
+        cpg = self.compensated_pregain.next()
+        inp = input * dbamp(self.pregain.next()) * dbamp(cpg)
+        return self.hardclip.next(inp) * dbamp(self.postgain.next()) * dbamp(-cpg)
+
+struct Tanh(Modulable):
+    comptime ovs: TimesOversampling = TimesOversampling.x2
+    var world: World
+    var pregain: LagFloat64Control
+    var postgain: LagFloat64Control
+    var compensated_pregain: LagFloat64Control
+    var tanh: TanhAD[2,Self.ovs]
+
+    def get_namespace(self) -> String:
+        return "tanh"
+
+    def __init__(out self, world: World):
+        self.world = world
+        self.pregain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.postgain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.compensated_pregain = LagFloat64Control(self.world, 0, 0.03, -24, 24)
+        self.tanh = TanhAD[2,Self.ovs](self.world)
+
+    def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
+        cpg = self.compensated_pregain.next()
+        inp = input * dbamp(self.pregain.next()) * dbamp(cpg)
+        return self.tanh.next(inp) * dbamp(self.postgain.next()) * dbamp(-cpg)
 
 struct Compress(Modulable):
     comptime ovs: TimesOversampling = TimesOversampling.none
@@ -1368,3 +1506,95 @@ struct Compress(Modulable):
             self.attack.v,
             self.release.v
             ) * dbamp(self.makeup.v)
+
+struct SamplesTimer(Copyable, Movable):
+    var counter: Int
+    var output: Int
+
+    def __init__(out self):
+        self.counter = 0
+        self.output = 0
+
+    def next(mut self, gate: Bool) -> Int:
+        # when the gate goes low the output becomes the number of samples bewteen when it went high and when it went low
+        if gate:
+            self.counter += 1
+        else:
+            self.output = self.counter
+            self.counter = 0
+
+        return self.output
+
+struct SecondsTimer(Copyable, Movable):
+    var world: World
+    var samples_counter: Int
+    var output: Float64
+    var rbd: RisingBoolDetector[]
+
+    def __init__(out self, world: World):
+        self.world = world
+        self.samples_counter = 0
+        self.output = 0.0
+        self.rbd = RisingBoolDetector[]()
+
+    def next(mut self, gate: Bool) -> Float64:
+        # when the gate goes low the output becomes the number of samples bewteen when it went high and when it went low
+        if gate:
+            self.samples_counter += 1
+
+        if self.rbd.next(not gate):
+            self.output = Float64(self.samples_counter) / self.world[].sample_rate
+            self.samples_counter = 0
+            # print("falling edge detected, output seconds: ",self.output)
+
+        # self.world[].print("seconds timer: gate: ",gate," samples counter: ",self.samples_counter," output: ",self.output)
+
+        return self.output
+
+struct Looper(Modulable):
+    comptime interp: Interp = Interp.cubic
+    comptime bufdur: Float64 = 8.0
+    comptime epsilon: Float64 = 1e-10
+    var world: World
+    var buffer: SIMDCircleBuffer[2,Self.interp]
+    var recording: BoolControl
+    var recording_env: ASREnv
+    var seconds_timer: SecondsTimer
+    var phasor: Phasor[]
+    var rate: Float64Control
+    var random_rate: TrigControl
+
+    def get_namespace(self) -> String:
+        return "looper"
+    
+    def __init__(out self, world: World):
+        self.world = world
+        self.buffer = SIMDCircleBuffer[2,Self.interp](self.world, Self.bufdur)
+        self.recording = BoolControl(False)
+        self.recording_env = ASREnv(self.world)
+        self.seconds_timer = SecondsTimer(self.world)
+        self.phasor = Phasor[](self.world)
+        self.rate = Float64Control(1.0, 0.25, 4.0, 2)
+        self.random_rate = TrigControl(False)
+
+    def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
+
+        if self.random_rate.v:
+            self.rate.v = exprand(0.25, 4.0)
+
+        rec_env = self.recording_env.next(0.03,1,0.03,self.recording.v)
+
+        dur_secs = self.seconds_timer.next(rec_env > 0.0) + Self.epsilon
+
+        if rec_env > 0.0:
+            self.buffer.write_next(input * rec_env)
+
+        phs = self.phasor.next(self.rate.v / dur_secs,trig=not rec_env > 0.0) * (dur_secs / Self.bufdur)
+
+        phs_start = (Self.bufdur - dur_secs) / Self.bufdur
+
+        output = self.buffer.read_phase(phs_start + phs)
+
+        # self.world[].print("rec boolean: ",self.recording.v," rate: ",self.rate.v," rec_env: ",rec_env," dur_secs: ",dur_secs," phs: ",phs," phs_start: ",phs_start)
+
+        return output

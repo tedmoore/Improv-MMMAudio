@@ -233,16 +233,16 @@ class QuNeoManager(StateSaver,Saveable):
         if self.midi_out:
             msg = supriya_midi.messages.NoteOnMessage(note_number=note, velocity=velocity, channel_id=channel)
             self.midi_out.send_message(msg.serialize())
-        else:
-            print(f"QuNeo MIDI output not initialized. Cannot send note_on for LED feedback. Note: {note}, Velocity: {velocity}, Channel: {channel}")
+        # else:
+        #     print(f"QuNeo MIDI output not initialized. Cannot send note_on for LED feedback. Note: {note}, Velocity: {velocity}, Channel: {channel}")
     
     def _send_note_off(self, note: int, velocity: int = 0, channel: int = 0):
         """Send a note off message to the QuNeo for LED control."""
         if self.midi_out:
             msg = supriya_midi.messages.NoteOffMessage(note_number=note, velocity=velocity, channel_id=channel)
             self.midi_out.send_message(msg.serialize())
-        else:
-            print(f"QuNeo MIDI output not initialized. Cannot send note_off for LED feedback. Note: {note}, Velocity: {velocity}, Channel: {channel}")
+        # else:
+            # print(f"QuNeo MIDI output not initialized. Cannot send note_off for LED feedback. Note: {note}, Velocity: {velocity}, Channel: {channel}")
     
     def _set_pad_green(self, pad: int):
         """Set pad LED to green."""
@@ -1460,9 +1460,25 @@ def build_spectral_smear_module_window(window: ModuleWindow):
     button_row.addStretch()
     section_layout.addLayout(button_row)
 
-
 register_module_window_builder("SpectralSmear", build_spectral_smear_module_window)
 
+def build_fin_module_window(window: ModuleWindow):
+    print("Building FIN module window...")
+    section_layout = window.add_section("Trigger Multiplier")
+    onset_thresh_sl = SliderA(
+        label="Onset Thresh",
+        mmm_audio=window.mmm_audio,
+        hid_manager=window.hid_manager,
+        spec=ControlSpec(0.0, 100.0),
+        default=0.5,
+        dtype=float,
+        callback=lambda v: window.mmm_audio.send_float(window.msgkey("onset_thresh"), v),
+        assign_button=True,
+        gui_id=window.msgkey("onset_thresh")
+    )
+    section_layout.addWidget(onset_thresh_sl)
+    
+register_module_window_builder("FIN", build_fin_module_window)
 
 class ModulePanel(StateSaver, QGroupBox):
     def __init__(self, name: str, namespace: str, mmm_audio: MMMAudio, open_callback, hid_manager: HIDManager):

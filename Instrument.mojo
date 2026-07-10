@@ -556,25 +556,28 @@ struct Instrument(Movable,Copyable):
     var mlp_manager: MLPManager[8,10]
     var test_input_file: TestInputFile
 
-    var sampcoll: ModuleWrapper[SampColl]
-    var phasey: ModuleWrapper[Phasey]
-    var fin: ModuleWrapper[FIN]
-    var benjolin: ModuleWrapper[Benjolin]
-    var sample_space: ModuleWrapper[SampleSpace]
-    var filterglitch: ModuleWrapper[FilterGlitch]
-    var stutter: ModuleWrapper[Stutter]
-    var fbdelay: ModuleWrapper[FBDelay,True]
-    var spectral_freeze: ModuleWrapper[SpecFreeze,True]
-    var spectral_smear: ModuleWrapper[SpectralSmear]
-    var chroma_sus: ModuleWrapper[ChromaSus]
-    var squiz: ModuleWrapper[Squiz]
-    var lpf: ModuleWrapper[LPFilter]
-    var chorus: ModuleWrapper[Chorus,True]
-    var reverb: ModuleWrapper[Reverb,True]
-    var ampmod: ModuleWrapper[AmpMod]
-    var compress: ModuleWrapper[Compress]
-    var softclip: ModuleWrapper[SoftClip]
-    comptime num_modules: Int = 18
+    var sampcoll: ModuleWrapper[SampColl] # 1
+    var phasey: ModuleWrapper[Phasey] # 2
+    var fin: ModuleWrapper[FIN] # 3
+    var benjolin: ModuleWrapper[Benjolin] # 4
+    var sample_space: ModuleWrapper[SampleSpace] # 5
+    var filterglitch: ModuleWrapper[FilterGlitch] # 6
+    var stutter: ModuleWrapper[Stutter] # 7
+    var fbdelay: ModuleWrapper[FBDelay,True] # 8
+    var spectral_freeze: ModuleWrapper[SpecFreeze,True] # 9
+    var spectral_smear: ModuleWrapper[SpectralSmear] # 10
+    var chroma_sus: ModuleWrapper[ChromaSus] # 11
+    var squiz: ModuleWrapper[Squiz] # 12
+    var lpf: ModuleWrapper[LPFilter] # 13
+    var looper: ModuleWrapper[Looper] # 14
+    var chorus: ModuleWrapper[Chorus,True] # 15
+    var reverb: ModuleWrapper[Reverb,True] # 16
+    var ampmod: ModuleWrapper[AmpMod] # 17
+    var compress: ModuleWrapper[Compress] # 18
+    var softclip: ModuleWrapper[SoftClip] # 19
+    var hardclip: ModuleWrapper[HardClip] # 20
+    var tanh: ModuleWrapper[Tanh] # 21
+    comptime num_modules: Int = 21
 
     def __init__(out self, world: World):
         self.world = world
@@ -613,12 +616,15 @@ struct Instrument(Movable,Copyable):
         self.chroma_sus = ModuleWrapper[ChromaSus](self.world, ChromaSus(self.world))
         self.squiz = ModuleWrapper[Squiz](self.world, Squiz(self.world))
         self.lpf = ModuleWrapper[LPFilter](self.world, LPFilter(self.world))
+        self.looper = ModuleWrapper[Looper](self.world, Looper(self.world))
         self.chorus = ModuleWrapper[Chorus,True](self.world, Chorus(self.world))
         self.reverb = ModuleWrapper[Reverb,True](self.world, Reverb(self.world))
         self.ampmod = ModuleWrapper[AmpMod](self.world, AmpMod(self.world))
         self.compress = ModuleWrapper(self.world, Compress(self.world))
         self.softclip = ModuleWrapper(self.world, SoftClip(self.world))
-        
+        self.hardclip = ModuleWrapper(self.world, HardClip(self.world))
+        self.tanh = ModuleWrapper(self.world, Tanh(self.world))
+
     def next(mut self) -> MFloat[2]:
 
         # INITIALIZE ALL CONTROLS
@@ -637,11 +643,14 @@ struct Instrument(Movable,Copyable):
             self.chroma_sus.lazy_initialization(self.cr)
             self.squiz.lazy_initialization(self.cr)
             self.lpf.lazy_initialization(self.cr)
+            self.looper.lazy_initialization(self.cr)
             self.chorus.lazy_initialization(self.cr)
             self.reverb.lazy_initialization(self.cr)
             self.ampmod.lazy_initialization(self.cr)
             self.compress.lazy_initialization(self.cr)
             self.softclip.lazy_initialization(self.cr)
+            self.hardclip.lazy_initialization(self.cr)
+            self.tanh.lazy_initialization(self.cr)
             self.ch.initialized = True
 
         # RETRIEVE ALL CONTROLS
@@ -679,12 +688,14 @@ struct Instrument(Movable,Copyable):
         self.matmix.provide_input(11,self.chroma_sus.next_from_matmix(self.matmix.get_output_check_used(10, 11), self.cr))
         self.matmix.provide_input(12,self.squiz.next_from_matmix(self.matmix.get_output_check_used(11, 12), self.cr))
         self.matmix.provide_input(13,self.lpf.next_from_matmix(self.matmix.get_output_check_used(12, 13), self.cr))
-        self.matmix.provide_input(14,self.chorus.next_from_matmix(self.matmix.get_output_check_used(13, 14), self.cr))
-        self.matmix.provide_input(15,self.reverb.next_from_matmix(self.matmix.get_output_check_used(14, 15), self.cr))
-        self.matmix.provide_input(16,self.ampmod.next_from_matmix(self.matmix.get_output_check_used(15, 16), self.cr))
-        self.matmix.provide_input(17,self.compress.next_from_matmix(self.matmix.get_output_check_used(16, 17), self.cr))
-        self.matmix.provide_input(18,self.softclip.next_from_matmix(self.matmix.get_output_check_used(17, 18), self.cr))
-
+        self.matmix.provide_input(14,self.looper.next_from_matmix(self.matmix.get_output_check_used(13, 14), self.cr))
+        self.matmix.provide_input(15,self.chorus.next_from_matmix(self.matmix.get_output_check_used(14, 15), self.cr))
+        self.matmix.provide_input(16,self.reverb.next_from_matmix(self.matmix.get_output_check_used(15, 16), self.cr))
+        self.matmix.provide_input(17,self.ampmod.next_from_matmix(self.matmix.get_output_check_used(16, 17), self.cr))
+        self.matmix.provide_input(18,self.compress.next_from_matmix(self.matmix.get_output_check_used(17, 18), self.cr))
+        self.matmix.provide_input(19,self.softclip.next_from_matmix(self.matmix.get_output_check_used(18, 19), self.cr))
+        self.matmix.provide_input(20,self.tanh.next_from_matmix(self.matmix.get_output_check_used(19, 20), self.cr))
+        
         if self.vol.next() > -130.0:
             out = self.matmix.get_output(Self.num_modules) * dbamp(self.vol.v)
             return out

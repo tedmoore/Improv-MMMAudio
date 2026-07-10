@@ -4,11 +4,11 @@
 
 * module panels can be smaller: the text boxes and such need to be smaller
 * Modules
-  * [x] Chroma
   * [ ] PShiftDel
+  * [ ] warm tones
+  * [ ] drone
   * [ ] Squabble
   * [ ] WavesetLooper
-  * [ ] Looper
   * [ ] Mags Autoencoder
   * [ ] SampleSpace (multi files)
   * [ ] SPEARPlayer (separate out data creation)
@@ -18,6 +18,8 @@
   * [ ] Decimator
   * [ ] Granulator
   * [ ] FM but more interesting
+  * [x] Chroma
+  * [x] Looper
   * [x] RingMod
   * [x] Filter
   * [x] Squiz

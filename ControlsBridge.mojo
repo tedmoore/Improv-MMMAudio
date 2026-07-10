@@ -54,6 +54,8 @@ def get_controls() -> PythonObject:
         get_controls_from_struct(sq, dict["modules"])
         lpf = LPFilter(w)
         get_controls_from_struct(lpf, dict["modules"])
+        looper = Looper(w)
+        get_controls_from_struct(looper, dict["modules"])
         chr = Chorus(w)
         get_controls_from_struct(chr, dict["modules"])
         rev = Reverb(w)
@@ -64,6 +66,10 @@ def get_controls() -> PythonObject:
         get_controls_from_struct(compress, dict["modules"])
         softclip = SoftClip(w)
         get_controls_from_struct(softclip, dict["modules"])
+        hardclip = HardClip(w)
+        get_controls_from_struct(hardclip, dict["modules"])
+        tanh = Tanh(w)
+        get_controls_from_struct(tanh, dict["modules"])
 
         # order that the modules are listed in the Instrument fields
         # is the order they'll be displayed in 
