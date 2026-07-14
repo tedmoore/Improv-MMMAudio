@@ -472,17 +472,23 @@ struct AmpMod(Modulable):
     var freq: LagFloat64Control
     var osc: Osc[interp=Interp.linear]
     var bRingMod: BoolControl
+    var random_freq: TrigControl
 
     def __init__(out self, world: World):
         self.world = world
         self.freq = LagFloat64Control(self.world,8, 0.03, 0.5, 10000.0, 5)
         self.osc = Osc[interp=Interp.linear](self.world)
         self.bRingMod = BoolControl(False)
+        self.random_freq = TrigControl()
 
     def get_namespace(self) -> String:
         return "ampmod"
 
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
+
+        if self.random_freq.next():
+            self.freq.set_normalized_value(random_float64(0.0, 1.0))
+
         mod = self.osc.next(self.freq.next())
         if not self.bRingMod.v: # not doing ring mod, means we *are* doing amp mod
             mod = linlin(mod,-1,1,0,1)
@@ -952,6 +958,11 @@ struct LPFilter(Modulable):
     var cutoff: Float64Control
     var q: Float64Control
     var filter: SVF[2]
+    var use_lfo: BoolControl
+    var use_lfo_env: ASREnv
+    var lfo_freq: Float64Control
+    var lfo: Osc[]
+    # var lag: Lag[]
 
     def get_namespace(self) -> String:
         return "lpfilter"
@@ -961,9 +972,21 @@ struct LPFilter(Modulable):
         self.cutoff = Float64Control(1000.0,20,20000,5)
         self.q = Float64Control(8.0,0.1,10.0)
         self.filter = SVF[2](self.world)
+        self.use_lfo = BoolControl(True)
+        self.lfo_freq = Float64Control(7,0.2,23.0, 2)
+        self.lfo = Osc[](self.world)
+        self.use_lfo_env = ASREnv(self.world)
+        # self.lag = Lag[](self.world, 0.01)
 
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
-        return self.filter.lpf(input, self.cutoff.v, self.q.v)
+        
+        lfo_val = self.lfo.next(self.lfo_freq.v,0,self.use_lfo.v)
+
+        use_lfo_env = self.use_lfo_env.next(0.03, 1.0, 0.03, self.use_lfo.v)
+
+        cutoff = select(use_lfo_env, self.cutoff.v, linlin(lfo_val, -1.0, 1.0, self.cutoff.v, self.cutoff.max))
+
+        return self.filter.lpf(input, cutoff, self.q.v)
 
 struct Phasey(Modulable):
     comptime times_oversampling: TimesOversampling = TimesOversampling.x2

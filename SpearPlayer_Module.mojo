@@ -48,10 +48,10 @@ struct SpearFrames(Copyable,Movable):
     var num_channels: Int
     var data: List[Float64]
 
-    def __init__(out self):
-        self.num_frames = 0
-        self.num_channels = 0
-        self.data = List[Float64]()
+    def __init__(out self, num_frames: Int = 0, num_channels: Int = 0):
+        self.num_frames = num_frames
+        self.num_channels = num_channels
+        self.data = List[Float64](length=self.num_frames * self.num_channels * 2, fill=0.0)
 
     # def resize(mut self, num_frames: Int, num_channels: Int):
     #     self.num_frames = num_frames
@@ -150,8 +150,7 @@ struct SpearFrames(Copyable,Movable):
             var num_frames = SpearFrames.read_u64_le(header, 8)
             var num_channels = SpearFrames.read_u64_le(header, 16)
 
-            var out = SpearFrames()
-            out.resize(num_frames=num_frames, num_channels=num_channels)
+            var out = SpearFrames(num_frames=num_frames, num_channels=num_channels)
 
             # Fast path: read payload directly into preallocated Float64 storage.
             var payload_span = Span[origin=MutAnyOrigin](ptr=out.data.unsafe_ptr(), length=len(out.data))
@@ -198,8 +197,7 @@ struct SpearFrames(Copyable,Movable):
             previous_sine_indexes = current_sine_indexes^
         
         needed_channels = max_channels_in_a_frame + max_appearing_channels
-        out = SpearFrames()
-        out.resize(num_frames=nframes, num_channels=needed_channels)
+        out = SpearFrames(num_frames=nframes, num_channels=needed_channels)
 
         current_sines = List[Int](length=needed_channels, fill=-1)
 
@@ -371,26 +369,6 @@ struct SpearPlayer(Modulable):
 #                 break
 #         oct += 1.0
 #     return tom^
-
-# def amp_comp_a(freq: Float64) -> Float64:
-#     """Approximate A-weighting curve for frequency-dependent amplitude compensation.
-#     Based on SuperCollider's AmpCompA implementation, which is derived from [here](http://www.beis.de/Elektronik/AudioMeasure/WeightingFilters.html).
-#     """
-#     # [TODO] Write a test to compare with SuperCollider's implementation.
-#     comptime k =  3.5041384e16
-#     comptime c1 = 424.31867740601
-#     comptime c2 = 11589.093052022
-#     comptime c3 = 544440.67046057
-#     comptime c4 = 148698928.24309
-#     var r = freq ** 2
-#     var m1 = r ** 4
-#     var n1 = (c1 + r) ** 2
-#     var n2 = c2 + r
-#     var n3 = c3 + r
-#     var n4 = (c4 + r) ** 2
-#     var level = k * m1 / (n1 * n2 * n3 * n4)
-#     return sqrt(level)
-
 
 def main() raises:
     args = argv()
