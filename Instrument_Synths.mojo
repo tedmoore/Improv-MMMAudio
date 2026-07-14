@@ -1595,6 +1595,47 @@ struct Looper(Modulable):
 
         output = self.buffer.read_phase(phs_start + phs)
 
-        # self.world[].print("rec boolean: ",self.recording.v," rate: ",self.rate.v," rec_env: ",rec_env," dur_secs: ",dur_secs," phs: ",phs," phs_start: ",phs_start)
-
         return output
+
+struct PShiftDel(Modulable):
+    comptime interp: Interp = Interp.cubic
+    comptime neg70db: Float64 = dbamp(-70.0)
+    comptime max_delay: Float64 = 5.0
+    var world: World
+    var pink_noise: PinkNoise[2]
+    var input_gate: BoolControl
+    var input_gate_env: ASREnv
+    var fb: MFloat[2]
+    var delay: Delay[2,Self.interp]
+    var delay_time: LagFloat64Control
+    var pshift: PitchShift[2,WindowType.tri]
+    var pitch_shift: Float64Control
+    var dctrap: DCTrap[2]
+    var feedback: LagFloat64Control
+
+    def get_namespace(self) -> String:
+        return "pshiftdel"
+    
+    def __init__(out self, world: World):
+        self.world = world
+        self.pink_noise = PinkNoise[2]()
+        self.input_gate = BoolControl(False)
+        self.input_gate_env = ASREnv(self.world)
+        self.fb = 0.0
+        self.delay = Delay[2,Self.interp](self.world, Self.max_delay)
+        self.delay_time = LagFloat64Control(self.world,0.1, 0.03, 0.025, Self.max_delay, 2)
+        self.pshift = PitchShift[2,WindowType.tri](self.world)
+        self.pitch_shift = Float64Control(0.0, -12, 12)
+        self.feedback = LagFloat64Control(self.world, -1, 0.03, -10.0, 6.0, 4)
+        self.dctrap = DCTrap[2](self.world)
+
+    def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
+        dry = input * self.input_gate_env.next(0.03, 1.0, 0.03, self.input_gate.v)
+        dry = dry + (self.pink_noise.next() * Self.neg70db)
+        delay = dry + self.fb
+        delay = self.delay.next(tanh(delay), self.delay_time.next())
+        delay = self.pshift.next(in_sig=delay, grain_dur=0.12231220585509, pitch_ratio=2 ** (self.pitch_shift.v / 12.0))
+        delay = self.dctrap.next(delay)
+        self.fb = delay * dbamp(self.feedback.next())
+        delay = tanh(delay)
+        return delay

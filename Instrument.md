@@ -4,7 +4,7 @@
 
 * module panels can be smaller: the text boxes and such need to be smaller
 * Modules
-  * [ ] PShiftDel
+  * [x] PShiftDel
   * [ ] warm tones
   * [ ] drone
   * [ ] Squabble
