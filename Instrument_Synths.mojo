@@ -1336,11 +1336,12 @@ struct ChromaSusWindow[n_chroma: Int](FFTProcessable):
         self.audio_lag_chroma.next(self.chroma.chroma)
 
         comptime if Self.legacy_functionality:
-            for i in range(Self.n_chroma):
-                ii: Int = self.modified_ordinal[i]
-                sig = self.channels[i].next_legacy(midi_offset, chan=ii)
-                menv = self.mask_envs[i].next(0.03,1,0.03,self.mask_bools[i])
-                out += sig * menv * self.audio_lag_chroma[i]
+            pass
+            # for i in range(Self.n_chroma):
+            #     ii: Int = self.modified_ordinal[i]
+            #     sig = self.channels[i].next_legacy(midi_offset, chan=ii)
+            #     menv = self.mask_envs[i].next(0.03,1,0.03,self.mask_bools[i])
+            #     out += sig * menv * self.audio_lag_chroma[i]
         else:
             for i in range(Self.n_chroma):
                 sig = self.channels[i].next(midi_offset, medal=self.medal_stand[i])

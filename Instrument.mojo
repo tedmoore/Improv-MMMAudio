@@ -1,6 +1,7 @@
 from mmm_audio import *
 from instrument.Instrument_Synths import *
 from instrument.SpearPlayer_Module import *
+from instrument.WarmTones_Module import *
 from instrument.MatrixMixer_module import *
 from instrument.ControlsHandler_module import *
 from std.reflection import *
@@ -563,24 +564,25 @@ struct Instrument(Movable,Copyable):
     var benjolin: ModuleWrapper[Benjolin] # 4
     var sample_space: ModuleWrapper[SampleSpace] # 5
     var spearplayer: ModuleWrapper[SpearPlayer] # 6
-    var pshiftdel: ModuleWrapper[PShiftDel] # 7
-    var filterglitch: ModuleWrapper[FilterGlitch] # 8
-    var stutter: ModuleWrapper[Stutter] # 9
-    var fbdelay: ModuleWrapper[FBDelay,True] # 10
-    var spectral_freeze: ModuleWrapper[SpecFreeze,True] # 11
-    var spectral_smear: ModuleWrapper[SpectralSmear] # 12
-    var chroma_sus: ModuleWrapper[ChromaSus] # 13
-    var squiz: ModuleWrapper[Squiz] # 14
-    var lpf: ModuleWrapper[LPFilter] # 15
-    var looper: ModuleWrapper[Looper] # 16
-    var chorus: ModuleWrapper[Chorus,True] # 17
-    var reverb: ModuleWrapper[Reverb,True] # 18
-    var ampmod: ModuleWrapper[AmpMod] # 19
-    var compress: ModuleWrapper[Compress] # 20
-    var softclip: ModuleWrapper[SoftClip] # 21
-    var hardclip: ModuleWrapper[HardClip] # 22
-    var tanh: ModuleWrapper[Tanh] # 23
-    comptime num_modules: Int = 23
+    var warmtones: ModuleWrapper[WarmTones] # 7
+    var pshiftdel: ModuleWrapper[PShiftDel] # 8
+    var filterglitch: ModuleWrapper[FilterGlitch] # 9
+    var stutter: ModuleWrapper[Stutter] # 10
+    var fbdelay: ModuleWrapper[FBDelay,True] # 11
+    var spectral_freeze: ModuleWrapper[SpecFreeze,True] # 12
+    var spectral_smear: ModuleWrapper[SpectralSmear] # 13
+    var chroma_sus: ModuleWrapper[ChromaSus] # 14
+    var squiz: ModuleWrapper[Squiz] # 15
+    var lpf: ModuleWrapper[LPFilter] # 16
+    var looper: ModuleWrapper[Looper] # 17
+    var chorus: ModuleWrapper[Chorus,True] # 18
+    var reverb: ModuleWrapper[Reverb,True] # 19
+    var ampmod: ModuleWrapper[AmpMod] # 20
+    var compress: ModuleWrapper[Compress] # 21
+    var softclip: ModuleWrapper[SoftClip] # 22
+    var hardclip: ModuleWrapper[HardClip] # 23
+    var tanh: ModuleWrapper[Tanh] # 24
+    comptime num_modules: Int = 24
 
     def __init__(out self, world: World):
         self.world = world
@@ -612,6 +614,7 @@ struct Instrument(Movable,Copyable):
         self.benjolin = ModuleWrapper(self.world, Benjolin(self.world))
         self.sample_space = ModuleWrapper(self.world, SampleSpace(self.world,"instrument/resources/SampleSpace_shoe-squeak.json"))
         self.spearplayer = ModuleWrapper(self.world, SpearPlayer(self.world,"instrument/resources/satie.spearplayer"))
+        self.warmtones = ModuleWrapper(self.world, WarmTones(self.world))
         self.pshiftdel = ModuleWrapper(self.world, PShiftDel(self.world))
         self.filterglitch = ModuleWrapper(self.world, FilterGlitch(self.world))
         self.stutter = ModuleWrapper(self.world, Stutter(self.world))
@@ -641,6 +644,7 @@ struct Instrument(Movable,Copyable):
             self.benjolin.lazy_initialization(self.cr)
             self.sample_space.lazy_initialization(self.cr)
             self.spearplayer.lazy_initialization(self.cr)
+            self.warmtones.lazy_initialization(self.cr)
             self.pshiftdel.lazy_initialization(self.cr)
             self.filterglitch.lazy_initialization(self.cr)
             self.stutter.lazy_initialization(self.cr)
@@ -688,22 +692,23 @@ struct Instrument(Movable,Copyable):
         self.matmix.provide_input(4,self.benjolin.next_from_matmix(self.matmix.get_output_check_used(3, 4), self.cr))
         self.matmix.provide_input(5,self.sample_space.next_from_matmix(self.matmix.get_output_check_used(4, 5), self.cr))
         self.matmix.provide_input(6,self.spearplayer.next_from_matmix(self.matmix.get_output_check_used(5, 6), self.cr))
-        self.matmix.provide_input(7,self.pshiftdel.next_from_matmix(self.matmix.get_output_check_used(6, 7), self.cr))
-        self.matmix.provide_input(8,self.filterglitch.next_from_matmix(self.matmix.get_output_check_used(7, 8), self.cr))
-        self.matmix.provide_input(9,self.stutter.next_from_matmix(self.matmix.get_output_check_used(8, 9), self.cr))
-        self.matmix.provide_input(10,self.fbdelay.next_from_matmix(self.matmix.get_output_check_used(9, 10), self.cr))
-        self.matmix.provide_input(11,self.spectral_freeze.next_from_matmix(self.matmix.get_output_check_used(10, 11), self.cr))
-        self.matmix.provide_input(12,self.spectral_smear.next_from_matmix(self.matmix.get_output_check_used(11, 12), self.cr))
-        self.matmix.provide_input(13,self.chroma_sus.next_from_matmix(self.matmix.get_output_check_used(12, 13), self.cr))
-        self.matmix.provide_input(14,self.squiz.next_from_matmix(self.matmix.get_output_check_used(13, 14), self.cr))
-        self.matmix.provide_input(15,self.lpf.next_from_matmix(self.matmix.get_output_check_used(14, 15), self.cr))
-        self.matmix.provide_input(16,self.looper.next_from_matmix(self.matmix.get_output_check_used(15, 16), self.cr))
-        self.matmix.provide_input(17,self.chorus.next_from_matmix(self.matmix.get_output_check_used(16, 17), self.cr))
-        self.matmix.provide_input(18,self.reverb.next_from_matmix(self.matmix.get_output_check_used(17, 18), self.cr))
-        self.matmix.provide_input(19,self.ampmod.next_from_matmix(self.matmix.get_output_check_used(18, 19), self.cr))
-        self.matmix.provide_input(20,self.compress.next_from_matmix(self.matmix.get_output_check_used(19, 20), self.cr))
-        self.matmix.provide_input(21,self.softclip.next_from_matmix(self.matmix.get_output_check_used(20, 21), self.cr))
-        self.matmix.provide_input(22,self.tanh.next_from_matmix(self.matmix.get_output_check_used(21, 22), self.cr))
+        self.matmix.provide_input(7,self.warmtones.next_from_matmix(self.matmix.get_output_check_used(6, 7), self.cr))
+        self.matmix.provide_input(8,self.pshiftdel.next_from_matmix(self.matmix.get_output_check_used(7, 8), self.cr))
+        self.matmix.provide_input(9,self.filterglitch.next_from_matmix(self.matmix.get_output_check_used(8, 9), self.cr))
+        self.matmix.provide_input(10,self.stutter.next_from_matmix(self.matmix.get_output_check_used(9, 10), self.cr))
+        self.matmix.provide_input(11,self.fbdelay.next_from_matmix(self.matmix.get_output_check_used(10, 11), self.cr))
+        self.matmix.provide_input(12,self.spectral_freeze.next_from_matmix(self.matmix.get_output_check_used(11, 12), self.cr))
+        self.matmix.provide_input(13,self.spectral_smear.next_from_matmix(self.matmix.get_output_check_used(12, 13), self.cr))
+        self.matmix.provide_input(14,self.chroma_sus.next_from_matmix(self.matmix.get_output_check_used(13, 14), self.cr))
+        self.matmix.provide_input(15,self.squiz.next_from_matmix(self.matmix.get_output_check_used(14, 15), self.cr))
+        self.matmix.provide_input(16,self.lpf.next_from_matmix(self.matmix.get_output_check_used(15, 16), self.cr))
+        self.matmix.provide_input(17,self.looper.next_from_matmix(self.matmix.get_output_check_used(16, 17), self.cr))
+        self.matmix.provide_input(18,self.chorus.next_from_matmix(self.matmix.get_output_check_used(17, 18), self.cr))
+        self.matmix.provide_input(19,self.reverb.next_from_matmix(self.matmix.get_output_check_used(18, 19), self.cr))
+        self.matmix.provide_input(20,self.ampmod.next_from_matmix(self.matmix.get_output_check_used(19, 20), self.cr))
+        self.matmix.provide_input(21,self.compress.next_from_matmix(self.matmix.get_output_check_used(20, 21), self.cr))
+        self.matmix.provide_input(22,self.softclip.next_from_matmix(self.matmix.get_output_check_used(21, 22), self.cr))
+        self.matmix.provide_input(23,self.tanh.next_from_matmix(self.matmix.get_output_check_used(22, 23), self.cr))
         
         if self.vol.next() > -130.0:
             out = self.matmix.get_output(Self.num_modules) * dbamp(self.vol.v)

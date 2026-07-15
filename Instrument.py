@@ -399,14 +399,14 @@ class HIDManager(StateSaver,Saveable):
         else:
             print(f"\033[1;33mWarning: 'nanoKONTROL2 SLIDER/KNOB' MIDI device not found.\033[0m")
 
-        if 'Oxygen 25' in midi_in_devices.keys():
-            port_index = midi_in_devices['Oxygen 25']
+        if 'K-Board' in midi_in_devices.keys():
+            port_index = midi_in_devices['K-Board']
             port = MidiIn().open_port(port_index)
-            port.set_callback(lambda message, timestamp, data=None: self.supriya_midiin(message, timestamp, data='oxygen25'))
+            port.set_callback(lambda message, timestamp, data=None: self.supriya_midiin(message, timestamp, data='kboard'))
             self.midi_ports.append(port)
-            print(f"Opened MIDI input port: 'Oxygen 25'")
+            print(f"Opened MIDI input port: 'K-Board'")
         else:
-            print(f"\033[1;33mWarning: 'Oxygen 25' MIDI device not found.\033[0m")
+            print(f"\033[1;33mWarning: 'K-Board' MIDI device not found.\033[0m")
 
         if 'TouchOSC Bridge' in midi_in_devices.keys():
             port_index = midi_in_devices['TouchOSC Bridge']
@@ -1480,6 +1480,25 @@ def build_fin_module_window(window: ModuleWindow):
     
 register_module_window_builder("FIN", build_fin_module_window)
 
+def build_warm_tones_module_window(window: ModuleWindow):
+    print("Building Warm Tones module window...")
+    section_layout = window.add_section("Trigger MIDI Note")
+    midi_note_sl = SliderA(
+        label="MIDI Note",
+        mmm_audio=window.mmm_audio,
+        hid_manager=window.hid_manager,
+        spec=ControlSpec(0.0, 127.0),
+        default=60,
+        dtype=int,
+        # decimals=0,
+        callback=lambda v: window.mmm_audio.send_float(window.msgkey("base_midi"), v),
+        assign_button=True,
+        gui_id=window.msgkey("base_midi")
+    )
+    section_layout.addWidget(midi_note_sl)
+    
+register_module_window_builder("WarmTones", build_warm_tones_module_window)
+
 class ModulePanel(StateSaver, QGroupBox):
     def __init__(self, name: str, namespace: str, mmm_audio: MMMAudio, open_callback, hid_manager: HIDManager):
         super().__init__(name)
@@ -1581,7 +1600,7 @@ class MatrixMixerManager(StateSaver, Saveable):
         self.num_outputs = num_outputs
         self.states: list[MatrixMixerState] = [MatrixMixerState(mmm_audio, num_inputs, num_outputs) for _ in range(n_states)]
         
-    def update(self, state_idx: int, source_idx: int, dest_idx: int, value: float):
+    def update(self, state_idx: int, source_idx: int, dest_idx: int, value: bool):
         if 0 <= state_idx < len(self.states):
             self.states[state_idx].update(source_idx, dest_idx, value)
         else:

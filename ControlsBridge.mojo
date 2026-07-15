@@ -6,6 +6,7 @@ from std.sys.intrinsics import _type_is_eq
 from instrument.Instrument import *
 from instrument.Instrument_Synths import *
 from instrument.SpearPlayer_Module import *
+from instrument.WarmTones_Module import *
 from std.os import abort
 
 # Currently, this needs to be edited so that it contains
@@ -41,6 +42,8 @@ def get_controls() -> PythonObject:
         get_controls_from_struct(sampspace, dict["modules"])
         spearplayer = SpearPlayer(w)
         get_controls_from_struct(spearplayer, dict["modules"])
+        warmtones = WarmTones(w)
+        get_controls_from_struct(warmtones, dict["modules"])
         pshiftdel = PShiftDel(w)
         get_controls_from_struct(pshiftdel, dict["modules"])
         fg = FilterGlitch(w)
