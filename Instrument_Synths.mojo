@@ -564,21 +564,21 @@ def amp_comp_a(freq: Float64) -> Float64:
     var level = k * m1 / (n1 * n2 * n3 * n4)
     return sqrt(level)
 
-struct SpectralSmearWindow(BufferedProcessable):
-    var trig: Trig
-    var fft: RealFFT[]
-    var topnpeaks: TopNFreqs
+# struct SpectralSmearWindow(BufferedProcessable):
+#     var trig: Trig
+#     var fft: RealFFT[]
+#     var topnpeaks: TopNFreqs
 
-    def __init__(out self, sample_rate: Float64, window_size: Int, n_sines: Int):
-        self.trig = Trig()
-        self.fft = RealFFT[](window_size)
-        self.topnpeaks = TopNFreqs(sample_rate=sample_rate, window_size=window_size, num_peaks=n_sines, thresh=-70)
+#     def __init__(out self, sample_rate: Float64, window_size: Int, n_sines: Int):
+#         self.trig = Trig()
+#         self.fft = RealFFT[](window_size)
+#         self.topnpeaks = TopNFreqs(sample_rate=sample_rate, window_size=window_size, num_peaks=n_sines, thresh=-70)
 
-    def next_window(mut self, mut samps: List[Float64]):
-        if self.trig.next():
-            print("SpectralSmearWindow: trig received, processing FFT")
-            self.fft.fft(samps)
-            self.topnpeaks.next_frame(self.fft.mags, self.fft.phases)
+#     def next_window(mut self, mut samps: List[Float64]):
+#         if self.trig.next():
+#             print("SpectralSmearWindow: trig received, processing FFT")
+#             self.fft.fft(samps)
+#             self.topnpeaks.next_frame(self.fft.mags, self.fft.phases)
 
 
 
@@ -590,7 +590,8 @@ struct SpectralSmear(Modulable):
     var world: World
     var ch: ControlsHandler
     var poly: PolyT[SpectralSmearVoice[Self.n_sines], Self.poly_n, steal=True]
-    var fftp: BufferedProcess[SpectralSmearWindow,output=False,input_window_shape=WindowType.hann]
+    # var fftp: BufferedProcess[SpectralSmearWindow,output=False,input_window_shape=WindowType.hann]
+    var fftp: FFTProcess[TopNFreqs,ifft=False,input_window_shape=WindowType.hann]
     var floats_to_pass: List[Float64]
     var trig_freq_mul: Float64
     var dur: Float64Control
@@ -604,33 +605,30 @@ struct SpectralSmear(Modulable):
         self.dur = Float64Control(8,0.1,20,4)
         self.max_dev = Float64Control(0.5,0.0,12.0,4)
         self.ch = ControlsHandler(self.world, "specsmear")
-        self.fftp = BufferedProcess[
-                SpectralSmearWindow,
-                output=False,
+        self.fftp = FFTProcess[
+                TopNFreqs,
+                ifft=False,
                 input_window_shape=WindowType.hann
-            ](self.world,process=SpectralSmearWindow(self.world[].sample_rate,Self.window_size,Self.n_sines),window_size=Self.window_size,hop_size=Self.hop_size)
+            ](self.world,process=TopNFreqs(sample_rate=self.world[].sample_rate, window_size=Self.window_size, num_peaks=Self.n_sines, thresh=-70),window_size=Self.window_size,hop_size=Self.hop_size)
 
     def get_namespace(self) -> String:
         return "specsmear"
 
     def next(mut self, mut cr: ControlsRegistry, input: MFloat[2]) -> MFloat[2]:
 
+        _ = self.fftp.next(input.reduce_add())
+        
         if self.ch.notify_update("specsmear.trig_freq_mul", self.trig_freq_mul):
-
-            self.fftp.get_process().trig.trig()
-            _ = self.fftp.next(input.reduce_add())
 
             self.floats_to_pass[0] = self.dur.v
             self.floats_to_pass[1] = self.max_dev.v
 
-            for i, pair in enumerate(self.fftp.get_process().topnpeaks.freq_amp_pairs):
+            for i, pair in enumerate(self.fftp.get_process().freq_amp_pairs):
                 self.floats_to_pass[2 + (i * 2)] = pair[0] * self.trig_freq_mul
                 self.floats_to_pass[3 + (i * 2)] = pair[1] * amp_comp_a(pair[0])
 
             self.poly.values_trig(self.floats_to_pass)
-        else:
-            _ = self.fftp.next(input.reduce_add())
-    
+        
         out = self.poly.next()
     
         return out
