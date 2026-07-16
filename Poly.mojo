@@ -60,7 +60,7 @@ struct PolyT[T: PolyVoiceT, num: Int = 8, steal: Bool = True](Movable, Copyable)
             self.voices.append(Self.T(world))
             self.is_active.append(False)
             self.index_trig_strings.append(namespace + "." + String(i) + ".trig")
-            self.index_values_strings.append(namespace + ".values" + String(i))
+            self.index_values_strings.append(namespace + "." + String(i) + ".values")
             self.index_values_trig_strings.append(namespace + "." + String(i) + ".values_trig")
 
 
@@ -100,72 +100,72 @@ struct PolyT[T: PolyVoiceT, num: Int = 8, steal: Bool = True](Movable, Copyable)
             except:
                 print("Error in PolyT trig: unable to steal voice")
 
-    def initialize_ch(mut self):
-        # ability to control parameters in each voice directly
-        comptime t_types = reflect[Self.T].field_types()
-        comptime t_names = reflect[Self.T].field_names()
+    # def initialize_ch(mut self):
+    #     # ability to control parameters in each voice directly
+    #     comptime t_types = reflect[Self.T].field_types()
+    #     comptime t_names = reflect[Self.T].field_names()
 
-        # =======================================================
-        # if you want, you can control values in individual
-        # voices by sending a message that will be:
-        # "namespace.index.controlname" with the value to update
-        # e.g. "mypoly.2.freq" with a value of 880.0
-        # =======================================================
-        comptime for i in range(reflect[Self.T].field_count()):
-            # TODO: add other types
-            if _type_is_eq[t_types[i], Float64Control]():
-                control_name: String = materialize[t_names[i]]()
-                for j in range(Self.num):
-                    ref fc = __struct_field_ref(i, self.voices[j])
-                    ref fc_param = rebind[Float64Control](fc)
-                    self.ch.add_control(String(j) + "." + control_name, fc_param.v)
+    #     # =======================================================
+    #     # if you want, you can control values in individual
+    #     # voices by sending a message that will be:
+    #     # "namespace.index.controlname" with the value to update
+    #     # e.g. "mypoly.2.freq" with a value of 880.0
+    #     # =======================================================
+    #     comptime for i in range(reflect[Self.T].field_count()):
+    #         # TODO: add other types
+    #         if _type_is_eq[t_types[i], Float64Control]():
+    #             control_name: String = materialize[t_names[i]]()
+    #             for j in range(Self.num):
+    #                 ref fc = __struct_field_ref(i, self.voices[j])
+    #                 ref fc_param = rebind[Float64Control](fc)
+    #                 self.ch.add_control(String(j) + "." + control_name, fc_param.v)
 
-    def update_controls(mut self):
-        self.ch.retrieve_from_python()
+    # def update_controls(mut self):
+    #     self.ch.retrieve_from_python()
 
-        # TRIGGER NEW AVAILABLE VOICE
-        if self.ch.notify_update(self.trig_string, self.vals_to_pass):
-            self.trig() # trig vals are used in this func.
+    #     # TRIGGER NEW AVAILABLE VOICE
+    #     if self.ch.notify_update(self.trig_string, self.vals_to_pass):
+    #         self.trig() # trig vals are used in this func.
 
         # UPDATE ALL VOICES TO THE SAME VALUES
         # if "namespace.all.values" is sent, update all voices with 
         # the provided values
-        if self.ch.notify_update(self.all_string, self.vals_to_pass):
-            # if the "all" message is sent, update all voices with the given values
-            for i in range(Self.num):
-                self.voices[i].update_values(self.vals_to_pass)
+        # if self.ch.notify_update(self.all_string, self.vals_to_pass):
+        #     # if the "all" message is sent, update all voices with the given values
+        #     for i in range(Self.num):
+        #         self.voices[i].update_values(self.vals_to_pass)
 
         # UPDATE VALUES OF A SPECIFIC VOICE WITHOUT TRIGGERING
         # if "namespace.index.values" is sent, update the corresponding voice
         # with the provided values but don't trigger it
-        for i in range(Self.num):
-            if self.ch.notify_update(self.index_values_strings[i], self.vals_to_pass):
-                self.voices[i].update_values(self.vals_to_pass)
+        # for i in range(Self.num):
+        #     if self.ch.notify_update(self.index_values_strings[i], self.vals_to_pass):
+        #         self.voices[i].update_values(self.vals_to_pass)
 
         # TRIGGER A SPECIFIC VOICE
         # if "namespace.index.trig" is sent, trigger the corresponding voice
-        for i in range(Self.num):
-            if self.ch.notify_update(self.index_trig_strings[i], self.vals_to_pass):
-                self.voices[i].trig()
-                self.is_active[i] = True
+        # for i in range(Self.num):
+        #     if self.ch.notify_update(self.index_trig_strings[i], self.vals_to_pass):
+        #         self.voices[i].trig()
+        #         self.is_active[i] = True
 
         # UPDATE VALUES AND TRIGGER A SPECIFIC VOICE
-        # if "namespace.index.values_trig" is sent, update the corresponding voice with the provided values and trigger it
-        for i in range(Self.num):
-            if self.ch.notify_update(self.index_values_trig_strings[i], self.vals_to_pass):
-                self.voices[i].update_values(self.vals_to_pass)
-                self.voices[i].trig()
-                self.is_active[i] = True
+        # if "namespace.index" is sent, update the corresponding voice with the provided values and trigger it
+        # for i in range(Self.num):
+        #     if self.ch.notify_update(self.index_values_trig_strings[i], self.vals_to_pass):
+        #         self.voices[i].update_values(self.vals_to_pass)
+        #         self.voices[i].trig()
+        #         self.is_active[i] = True
         
-        self.ch.initialized = True
+        # self.ch.initialized = True
 
     # get the audio output from whatever voices are playing
     def next(mut self, input: MFloat[2] = 0.0) -> MFloat[2]:
         
-        if not self.ch.initialized:
-            self.initialize_ch()
+            # if not self.ch.initialized:
+            #     self.initialize_ch()
         
-        self.update_controls()
+        # self.update_controls()
 
         out = MFloat[2](0.0, 0.0)
         comptime for i in range(Self.num):

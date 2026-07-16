@@ -127,8 +127,8 @@ struct ControlsHandler(Movable, Copyable):
     def add_control(mut self, var name: String, mut control: Int):
         self.int_dict[self.namespace + "." + name] = UnsafePointer[mut=True,Int,MutUntrackedOrigin](unsafe_from_address=Int(UnsafePointer(to=control)))
 
-    def add_trig_control(mut self, var name: String, mut control: Bool):
-        self.trig_dict[self.namespace + "." + name] = UnsafePointer[mut=True,Bool,MutUntrackedOrigin](unsafe_from_address=Int(UnsafePointer(to=control)))
+    # def add_trig_control(mut self, var name: String, mut control: Bool):
+    #     self.trig_dict[self.namespace + "." + name] = UnsafePointer[mut=True,Bool,MutUntrackedOrigin](unsafe_from_address=Int(UnsafePointer(to=control)))
 
     # def add_func(mut self, name: String, func: fn(values: List[Float64])):
     #     self.fn_dict[name] = func
@@ -257,18 +257,20 @@ struct BoolControl(Movable,Copyable):
         self.v = default
         self.include_in_gui = include_in_gui
 
-struct LagBoolControl(Movable,Copyable):
+struct EnvBoolControl(Movable,Copyable):
     var world: World
     var boolcontrol: BoolControl
-    var lag: Lag[]
+    var env: ASREnv
+    var ramp_time: Float64
 
-    def __init__(out self, world: World, default: Bool, lagtime: Float64, include_in_gui: Bool = True):
+    def __init__(out self, world: World, default: Bool = False, ramp_time: Float64 = 0.03, include_in_gui: Bool = True):
         self.world = world
         self.boolcontrol = BoolControl(default, include_in_gui)
-        self.lag = Lag(self.world, lagtime)
+        self.ramp_time = ramp_time
+        self.env = ASREnv(self.world)
 
     def next(mut self) -> Float64:
-        return self.lag.next(1.0 if self.boolcontrol.v else 0.0)
+        return self.env.next(self.ramp_time,1.0,self.ramp_time,self.boolcontrol.v)
 
 struct TrigControl(Movable,Copyable):
     var v: Bool
@@ -283,3 +285,29 @@ struct TrigControl(Movable,Copyable):
             self.v = False
             return True
         return False
+
+# struct KeyboardControl(Movable,Copyable):
+#     var note: Float64
+#     var velocity: Float64
+#     var changeds: List[Changed[Float64]]
+#     var include_in_gui: Bool
+
+#     def __init__(out self, include_in_gui: Bool = True):
+#         self.note = 0.0
+#         self.velocity = 0.0
+#         self.include_in_gui = include_in_gui
+
+#         self.changeds = List[Changed[Float64]]()
+#         self.changeds.append(Changed[Float64](self.note))
+#         self.changeds.append(Changed[Float64](self.velocity))
+
+#     def changed(mut self) -> Bool:
+#         c = False
+#         c |= self.changeds[0].next(self.note)
+#         c |= self.changeds[1].next(self.velocity)
+#         return c
+
+#     def next(mut self) -> Bool: # bool indicates note on
+#         if self.changed() and self.velocity > 0.0:
+#             return True
+#         return False

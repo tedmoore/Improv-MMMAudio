@@ -304,7 +304,7 @@ class GlobalKeyFilter(QObject):
 
 class HIDMsg:
     """A simple class to represent a HID message."""
-    def __init__(self, hidaddr: str, value: float):
+    def __init__(self, hidaddr: str, value: float | list[float]):
         self.hidaddr = hidaddr
         self.value = value
 
@@ -402,7 +402,7 @@ class HIDManager(StateSaver,Saveable):
         if 'K-Board' in midi_in_devices.keys():
             port_index = midi_in_devices['K-Board']
             port = MidiIn().open_port(port_index)
-            port.set_callback(lambda message, timestamp, data=None: self.supriya_midiin(message, timestamp, data='kboard'))
+            port.set_callback(lambda message, timestamp, data=None: self.supriya_keyboardin(message, timestamp, data='kboard'))
             self.midi_ports.append(port)
             print(f"Opened MIDI input port: 'K-Board'")
         else:
@@ -436,6 +436,14 @@ class HIDManager(StateSaver,Saveable):
 
         if t in self.supriya2hidmsg:
             hidmsg = self.supriya2hidmsg[t](msg_dataclass, data)
+            self.hidin(hidmsg)
+            
+    def supriya_keyboardin(self, message, timestamp, data=None):
+        msg_dataclass = MidiMessage.parse(message)
+        t = type(msg_dataclass)
+
+        if t == supriya_midi.messages.NoteOnMessage or t == supriya_midi.messages.NoteOffMessage:
+            hidmsg = HIDMsg("keyboard", [msg_dataclass.note_number, msg_dataclass.velocity]) # type: ignore
             self.hidin(hidmsg)
 
     def _process_hid_main_thread(self, hidmsg: HIDMsg):
@@ -1046,6 +1054,65 @@ class EnumFieldA(QWidget):
                     self.combobox.blockSignals(was_blocked)
                     self.update()
 
+class PyPoly:
+    def __init__(self, key: str, nvoices: int, mmm_audio: MMMAudio, hid_manager: HIDManager):
+        self.key = key
+        self.nvoices = nvoices
+        self.mmm_audio = mmm_audio
+        self.hid_manager = hid_manager
+        self.all_voice_ids = set(range(nvoices))
+        self.active_voice_ids = set()
+        
+    def from_hid(self, value: list[float]):
+        note_number, velocity = value
+        
+        if velocity > 0:
+            # note on
+            if len(self.active_voice_ids) < self.nvoices:
+                # find the lowest available voice id
+                available_voice_ids = self.all_voice_ids - self.active_voice_ids
+                voice_id = min(available_voice_ids)
+                self.active_voice_ids.add(voice_id)
+                key = f'{self.key}.{voice_id}'
+                print(f"PyPoly: Note ON - {note_number} with velocity {velocity} assigned to voice {voice_id}")
+                self.mmm_audio.send_floats(key, [note_number, velocity])
+        else:
+            # note off
+            for voice_id in list(self.active_voice_ids):
+                key = f'{self.key}.{voice_id}'
+                print(f"PyPoly: Note OFF - {note_number} with velocity {velocity} released from voice {voice_id}")
+                self.mmm_audio.send_floats(key, [note_number, velocity])
+                self.active_voice_ids.remove(voice_id)
+
+class KeyboardA(QWidget):
+    def __init__(self, label: str, hid_manager: HIDManager, mmm_audio: MMMAudio, assign_button: bool = True, gui_id: Optional[str] = None):
+        super().__init__()
+
+        layout = QHBoxLayout()
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(8)
+        
+        self.pypoly = PyPoly(gui_id if gui_id else label, nvoices=8, mmm_audio=mmm_audio, hid_manager=hid_manager)
+
+        self.label = QLabel(label)
+
+        layout.addWidget(self.label)
+
+        if assign_button:
+            self.assign_button = AssignmentButton(gui_id if gui_id else label, hid_manager=hid_manager)
+            self.assign_button.setFixedWidth(30)
+            layout.addWidget(self.assign_button)
+
+        self.setLayout(layout)
+
+        if gui_id:
+            hid_manager.register_gui(gui_id, self)
+            
+    def set_from_hid(self, value: list[float]):
+        print(f"KeyboardA received HID value: {value}")
+        note_number, velocity = value
+        self.pypoly.from_hid([note_number, velocity])
+
 class LFOPanel(QGroupBox):
     def __init__(self, idx: int, manager: "LFOManager"):
         super().__init__(f"LFO {idx}")
@@ -1483,21 +1550,16 @@ register_module_window_builder("FIN", build_fin_module_window)
 def build_warm_tones_module_window(window: ModuleWindow):
     print("Building Warm Tones module window...")
     section_layout = window.add_section("Trigger MIDI Note")
-    midi_note_sl = SliderA(
-        label="MIDI Note",
-        mmm_audio=window.mmm_audio,
+    ka = KeyboardA(
+        label="Keyboard Assign",
         hid_manager=window.hid_manager,
-        spec=ControlSpec(0.0, 127.0),
-        default=60,
-        dtype=int,
-        # decimals=0,
-        callback=lambda v: window.mmm_audio.send_float(window.msgkey("base_midi"), v),
         assign_button=True,
-        gui_id=window.msgkey("base_midi")
+        mmm_audio=window.mmm_audio,
+        gui_id="SuperSaws" # no namespace here because otherwis it would be SuperSaws.SuperSaws and that would be confusing
     )
-    section_layout.addWidget(midi_note_sl)
+    section_layout.addWidget(ka)
     
-register_module_window_builder("WarmTones", build_warm_tones_module_window)
+register_module_window_builder("SuperSaws", build_warm_tones_module_window)
 
 class ModulePanel(StateSaver, QGroupBox):
     def __init__(self, name: str, namespace: str, mmm_audio: MMMAudio, open_callback, hid_manager: HIDManager):

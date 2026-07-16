@@ -1,7 +1,7 @@
 from mmm_audio import *
 from instrument.Instrument_Synths import *
 from instrument.SpearPlayer_Module import *
-from instrument.WarmTones_Module import *
+from instrument.SuperSaws_Module import *
 from instrument.MatrixMixer_module import *
 from instrument.ControlsHandler_module import *
 from std.reflection import *
@@ -334,6 +334,18 @@ struct ControlsRegistry(Movable,Copyable):
                 ref bp = __struct_field_ref(i, host)
                 ref bpr = rebind[BoolControl](bp)
                 self.bool_dict[name] = UnsafePointer[Bool, MutUntrackedOrigin](unsafe_from_address=Int(UnsafePointer(to=bpr.v)))
+
+            elif _type_is_eq[types[i], EnvBoolControl]():
+                name = namespace + "." + String(materialize[names[i]]())
+                ref ebp = __struct_field_ref(i, host)
+                ref ebpr = rebind[EnvBoolControl](ebp)
+                self.bool_dict[name] = UnsafePointer[Bool, MutUntrackedOrigin](unsafe_from_address=Int(UnsafePointer(to=ebpr.boolcontrol.v)))
+            
+            elif _type_is_eq[types[i], TrigControl]():
+                name = namespace + "." + String(materialize[names[i]]())
+                ref tp = __struct_field_ref(i, host)
+                ref tpr = rebind[TrigControl](tp)
+                self.trig_dict[name] = UnsafePointer[Bool, MutUntrackedOrigin](unsafe_from_address=Int(UnsafePointer(to=tpr.v)))
             
             elif _type_is_eq[types[i], TrigControl]():
                 name = namespace + "." + String(materialize[names[i]]())
@@ -564,7 +576,7 @@ struct Instrument(Movable,Copyable):
     var benjolin: ModuleWrapper[Benjolin] # 4
     var sample_space: ModuleWrapper[SampleSpace] # 5
     var spearplayer: ModuleWrapper[SpearPlayer] # 6
-    var warmtones: ModuleWrapper[WarmTones] # 7
+    var SuperSaws: ModuleWrapper[SuperSaws] # 7
     var pshiftdel: ModuleWrapper[PShiftDel] # 8
     var filterglitch: ModuleWrapper[FilterGlitch] # 9
     var stutter: ModuleWrapper[Stutter] # 10
@@ -614,7 +626,7 @@ struct Instrument(Movable,Copyable):
         self.benjolin = ModuleWrapper(self.world, Benjolin(self.world))
         self.sample_space = ModuleWrapper(self.world, SampleSpace(self.world,"instrument/resources/SampleSpace_shoe-squeak.json"))
         self.spearplayer = ModuleWrapper(self.world, SpearPlayer(self.world,"instrument/resources/satie.spearplayer"))
-        self.warmtones = ModuleWrapper(self.world, WarmTones(self.world))
+        self.SuperSaws = ModuleWrapper(self.world, SuperSaws(self.world))
         self.pshiftdel = ModuleWrapper(self.world, PShiftDel(self.world))
         self.filterglitch = ModuleWrapper(self.world, FilterGlitch(self.world))
         self.stutter = ModuleWrapper(self.world, Stutter(self.world))
@@ -644,7 +656,7 @@ struct Instrument(Movable,Copyable):
             self.benjolin.lazy_initialization(self.cr)
             self.sample_space.lazy_initialization(self.cr)
             self.spearplayer.lazy_initialization(self.cr)
-            self.warmtones.lazy_initialization(self.cr)
+            self.SuperSaws.lazy_initialization(self.cr)
             self.pshiftdel.lazy_initialization(self.cr)
             self.filterglitch.lazy_initialization(self.cr)
             self.stutter.lazy_initialization(self.cr)
@@ -692,7 +704,7 @@ struct Instrument(Movable,Copyable):
         self.matmix.provide_input(4,self.benjolin.next_from_matmix(self.matmix.get_output_check_used(3, 4), self.cr))
         self.matmix.provide_input(5,self.sample_space.next_from_matmix(self.matmix.get_output_check_used(4, 5), self.cr))
         self.matmix.provide_input(6,self.spearplayer.next_from_matmix(self.matmix.get_output_check_used(5, 6), self.cr))
-        self.matmix.provide_input(7,self.warmtones.next_from_matmix(self.matmix.get_output_check_used(6, 7), self.cr))
+        self.matmix.provide_input(7,self.SuperSaws.next_from_matmix(self.matmix.get_output_check_used(6, 7), self.cr))
         self.matmix.provide_input(8,self.pshiftdel.next_from_matmix(self.matmix.get_output_check_used(7, 8), self.cr))
         self.matmix.provide_input(9,self.filterglitch.next_from_matmix(self.matmix.get_output_check_used(8, 9), self.cr))
         self.matmix.provide_input(10,self.stutter.next_from_matmix(self.matmix.get_output_check_used(9, 10), self.cr))

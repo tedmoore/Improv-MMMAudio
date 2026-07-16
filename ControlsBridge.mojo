@@ -6,7 +6,7 @@ from std.sys.intrinsics import _type_is_eq
 from instrument.Instrument import *
 from instrument.Instrument_Synths import *
 from instrument.SpearPlayer_Module import *
-from instrument.WarmTones_Module import *
+from instrument.SuperSaws_Module import *
 from std.os import abort
 
 # Currently, this needs to be edited so that it contains
@@ -42,8 +42,8 @@ def get_controls() -> PythonObject:
         get_controls_from_struct(sampspace, dict["modules"])
         spearplayer = SpearPlayer(w)
         get_controls_from_struct(spearplayer, dict["modules"])
-        warmtones = WarmTones(w)
-        get_controls_from_struct(warmtones, dict["modules"])
+        SuperSaws = SuperSaws(w)
+        get_controls_from_struct(SuperSaws, dict["modules"])
         pshiftdel = PShiftDel(w)
         get_controls_from_struct(pshiftdel, dict["modules"])
         fg = FilterGlitch(w)
@@ -189,6 +189,26 @@ def get_controls_from_struct[T: AnyType](stru: T, maindict: PythonObject) raises
                 pdict["type"] = "trig"
                 pdict["default"] = tp_param.v
                 dict["params"].append(pdict)
+
+        elif _type_is_eq[types[i], EnvBoolControl]():
+            ref ebp = __struct_field_ref(i, stru)
+            ref ebp_param = rebind[EnvBoolControl](ebp)
+            if ebp_param.boolcontrol.include_in_gui:
+                pdict = Python.dict()
+                pdict["name"] = name
+                pdict["type"] = "bool"
+                pdict["default"] = ebp_param.boolcontrol.v
+                dict["params"].append(pdict)
+
+        # elif _type_is_eq[types[i], KeyboardControl]():
+        #     ref kbp = __struct_field_ref(i, stru)
+        #     ref kbp_param = rebind[KeyboardControl](kbp)
+        #     if kbp_param.include_in_gui:
+        #         pdict = Python.dict()
+        #         pdict["name"] = name
+        #         pdict["type"] = "keyboard"
+        #         pdict["default_note"] = kbp_param.note
+        #         dict["params"].append(pdict)
     
     basename_py = Python.str(structname)
     maindict[basename_py] = dict
