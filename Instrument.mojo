@@ -570,6 +570,8 @@ struct Instrument(Movable,Copyable):
     var mlp_manager: MLPManager[8,10]
     var test_input_file: TestInputFile
 
+    # can't make a list of these, because 
+    # technically they are all different types
     var sampcoll: ModuleWrapper[SampColl] # 1
     var phasey: ModuleWrapper[Phasey] # 2
     var fin: ModuleWrapper[FIN] # 3
@@ -620,6 +622,8 @@ struct Instrument(Movable,Copyable):
         self.lfo_manager = LFOManager(self.world)
         self.mlp_manager = MLPManager[n_mlps=8,max_inputs=10](self.world)
 
+        # can't make a list of these, because 
+        # technically they are all different types
         self.sampcoll = ModuleWrapper(self.world, SampColl(self.world))
         self.phasey = ModuleWrapper[Phasey](self.world, Phasey(self.world))
         self.fin = ModuleWrapper(self.world, FIN(self.world))
@@ -649,6 +653,8 @@ struct Instrument(Movable,Copyable):
 
         # INITIALIZE ALL CONTROLS
         if not self.ch.initialized:
+            # can't make a list of these, because 
+            # technically they are all different types
             self.cr.register("instrument.vol", self.vol)
             self.sampcoll.lazy_initialization(self.cr)
             self.phasey.lazy_initialization(self.cr)
@@ -697,6 +703,8 @@ struct Instrument(Movable,Copyable):
             mic0 = MFloat[2](self.world[].sound_in(0))
 
         self.matmix.provide_input(0, mic0)
+        # can't make a list of these, because 
+        # technically they are all different types
         self.matmix.provide_input(1,self.sampcoll.next_from_matmix(self.matmix.get_output_check_used(0, 1), self.cr))
         self.matmix.provide_input(2,self.phasey.next_from_matmix(self.matmix.get_output_check_used(1, 2), self.cr))
         self.matmix.provide_input(3,self.fin.next_from_matmix(self.matmix.get_output_check_used(2, 3), self.cr))
