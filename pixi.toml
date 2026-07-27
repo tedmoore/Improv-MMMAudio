@@ -14,11 +14,8 @@ cmd = "python testing_mmm_audio/validation/run_all_validations.py {{ plots }}"
 [tasks.validate_snapshot]
 cmd = "python testing_mmm_audio/validation/validate_against_snapshot.py"
 
-[tasks.unit_tests_mojo]
+[tasks.unit_tests]
 cmd = "mojo testing_mmm_audio/UnitTests.mojo"
-
-[tasks.unit_tests_python]
-cmd = "python -m testing_mmm_audio.UnitTests"
 
 [tasks.test_building]
 cmd = "python testing_mmm_audio/test_build_mojo_files.py"
@@ -27,7 +24,7 @@ cmd = "python testing_mmm_audio/test_build_mojo_files.py"
 cmd = "python testing_mmm_audio/check_docstrings.py"
 
 [tasks.test_all]
-depends-on = ["unit_tests_mojo", "unit_tests_python", "test_building","validate_snapshot", "check_docstrings"]
+depends-on = ["unit_tests","test_building","validate_snapshot","check_docstrings"]
 
 [tasks.docs_serve]
 cmd = "mkdocs serve"
@@ -35,13 +32,15 @@ cmd = "mkdocs serve"
 [dependencies]
 setuptools = "<82"
 mojo = "1.0.0b2.*"
-numpy = ">=2.3.5,<3"
-scipy = ">=1.17.0,<2"
+numpy = ">=2.4.6,<3"
+scipy = ">=1.18.0,<2"
 librosa = ">=0.11.0,<0.12"
-python = "3.12.*"
-matplotlib = ">=3.10.8,<4"
+# python = "3.12.*"
+python = "3.14.*"
+matplotlib = ">=3.11.0,<4"
 pyside6 = ">=6.10.2,<7"
 umap-learn = ">=0.5.11,<0.6"
+mojmelo = ">=0.1.2,<0.2"
 mkdocs = ">=1.6.1,<2"
 mkdocs-material = ">=9.7.1,<10"
 mkdocstrings = ">=1.0.3,<2"

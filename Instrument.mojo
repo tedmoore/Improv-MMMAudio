@@ -618,7 +618,7 @@ struct Instrument(Movable,Copyable):
 
         self.cr = ControlsRegistry(self.world)
         self.lfo_manager = LFOManager(self.world)
-        self.mlp_manager = MLPManager[8,10](self.world)
+        self.mlp_manager = MLPManager[n_mlps=8,max_inputs=10](self.world)
 
         self.sampcoll = ModuleWrapper(self.world, SampColl(self.world))
         self.phasey = ModuleWrapper[Phasey](self.world, Phasey(self.world))
@@ -696,7 +696,6 @@ struct Instrument(Movable,Copyable):
         else:
             mic0 = MFloat[2](self.world[].sound_in(0))
 
-        # TODO: figure out how to get these in a list so i can iterate
         self.matmix.provide_input(0, mic0)
         self.matmix.provide_input(1,self.sampcoll.next_from_matmix(self.matmix.get_output_check_used(0, 1), self.cr))
         self.matmix.provide_input(2,self.phasey.next_from_matmix(self.matmix.get_output_check_used(1, 2), self.cr))
